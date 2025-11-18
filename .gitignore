@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual env
+.env
+.venv
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# Gradio / 本地运行缓存
+logs/
+*.log
+cache/
+# 一体版代码
+langchain-1.0版本更新测试.py
