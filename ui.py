@@ -238,7 +238,7 @@ def create_gradio_app():
     """创建并返回 Gradio Blocks 应用"""
     with gr.Blocks() as demo:
         gr.Markdown("## 旅游助手（MCP + Qwen + LangChain Agent）")
-        chat = gr.Chatbot(type="messages", height=480, label="对话")
+        chat = gr.Chatbot(height=480, label="对话")
         txt = gr.Textbox(placeholder="输入需求，如：规划成都2天美食+人文轻松路线…")
         clear_btn = gr.Button("清空")
         status = gr.Markdown("", visible=False)
