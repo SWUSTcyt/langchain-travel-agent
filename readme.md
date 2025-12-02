@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Travel Agent Demo (LangChain 1.0 + MCP + Qwen)
 
 一个基于 **LangChain 1.0**、**阿里通义 Qwen** 和 **MCP(amap-maps)** 的旅游规划 Agent Demo，支持：
@@ -52,6 +53,4 @@ pip install -r requirements.txt
 
 ```bash
 python main.py
-```
-
-
+``
