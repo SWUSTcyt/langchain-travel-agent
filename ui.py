@@ -143,11 +143,12 @@ def _event_to_summary(event: dict) -> str:
 
 def stream_answer(
     user_text: str, chat_history, dev_mode_flag: bool
-) -> Tuple[str, str, Any]:
-    """使用 agent.stream 做增量推送，并生成摘要 / JSON 日志"""
+) -> Tuple[str, str, str, Any]:  # 🆕 返回 4 个值：content, logs, reasoning, raw_events
+    """使用 agent.stream 做增量推送，并生成摘要 / JSON 日志 + reasoning"""
     summaries: List[str] = []
     raw_events: List[Dict[str, Any]] = []
     final_text = ""
+    reasoning_text = ""  # 🆕 累积思考过程
     tool_rounds_tracker = 0
     last_batch_prefix_seen = None
 
@@ -200,17 +201,25 @@ def stream_answer(
             elif "messages" in event:
                 msgs = event["messages"]
 
+        # 🆕 提取 reasoning 和 content
         if isinstance(msgs, list):
-            last_ai = next(
-                (m for m in reversed(msgs) if isinstance(m, AIMessage)), None
-            )
-            if last_ai:
-                final_text = last_ai.content
+            for msg in msgs:
+                if isinstance(msg, AIMessage):
+                    # 提取 reasoning（从 additional_kwargs）
+                    if hasattr(msg, 'additional_kwargs') and isinstance(msg.additional_kwargs, dict):
+                        reasoning_chunk = msg.additional_kwargs.get('reasoning_content', '')
+                        if reasoning_chunk:  # 只累积非空的 reasoning
+                            reasoning_text += reasoning_chunk
+
+                    # 提取 content（最终回复）
+                    if hasattr(msg, 'content') and msg.content:
+                        final_text = msg.content
 
         md_text = "  \n".join(summaries) if summaries else "（本次尚无日志）"
         yield (
             final_text or "",
             md_text,
+            reasoning_text or "",  # 🆕 思考过程
             raw_events if dev_mode_flag else None,
         )
 
@@ -220,18 +229,18 @@ def stream_answer(
             {"messages": [HumanMessage(content=user_text)]},
             config={"recursion_limit": 40},
         )
-        last_ai_text = next(
-            (
-                m.content
-                for m in reversed(result.get("messages", []))
-                if isinstance(m, AIMessage)
-            ),
-            "",
-        )
-        final_text = last_ai_text or str(result)
+        for msg in reversed(result.get("messages", [])):
+            if isinstance(msg, AIMessage):
+                # 提取 content
+                final_text = msg.content if hasattr(msg, 'content') else str(msg)
+
+                # 🆕 兜底时也提取 reasoning
+                if hasattr(msg, 'additional_kwargs') and isinstance(msg.additional_kwargs, dict):
+                    reasoning_text = msg.additional_kwargs.get('reasoning_content', '')
+                break
 
     md_text = "  \n".join(summaries) if summaries else "（本次尚无日志）"
-    yield (final_text, md_text, raw_events if dev_mode_flag else None)
+    yield (final_text, md_text, reasoning_text, raw_events if dev_mode_flag else None)
 
 
 def create_gradio_app():
@@ -252,28 +261,55 @@ def create_gradio_app():
                 visible=False,
             )
 
+        # 🆕 新增：思考过程展示区域
+        with gr.Accordion("💭 AI 思考过程（点击展开）", open=False):
+            reasoning_md = gr.Markdown(
+                label="深度推理链",
+                value="（本次尚无思考记录）",
+            )
+            gr.Markdown("""
+## 说明
+
+这里展示了 AI 的内部推理过程，包括：
+
+- **🎯 意图理解**：如何分析和理解你的需求
+- **🔍 策略规划**：决定调用哪些工具以及调用顺序
+- **🧩 信息整合**：如何根据工具结果组织最终回复
+- **⚡ 推理链**：完整的思考步骤和逻辑
+
+*注：思考过程仅供参考，最终以正式回复为准*
+            """)
+
         def on_submit(history, user_text, dev_mode_flag):
             history = history or []
             history.append({"role": "user", "content": user_text})
             history.append({"role": "assistant", "content": ""})
 
-            for partial_text, md_logs, raw in stream_answer(
+            # 🆕 接收 4 个返回值：content, logs, reasoning, raw_events
+            for partial_text, md_logs, reasoning, raw in stream_answer(
                 user_text, history, dev_mode_flag
             ):
                 history[-1]["content"] = partial_text
                 json_payload = raw if dev_mode_flag else None
+
+                # 🆕 格式化 reasoning（添加标题和样式）
+                formatted_reasoning = reasoning if reasoning else "（本次尚无思考记录）"
+
+                # 🆕 返回 6 个值：history, txt, status, logs_md, logs_json, reasoning_md
                 yield (
                     history,
                     gr.update(value="", interactive=True),
                     gr.update(visible=False),
                     gr.update(value=md_logs),
                     gr.update(value=json_payload, visible=bool(dev_mode_flag)),
+                    gr.update(value=formatted_reasoning),  # 🆕 思考过程
                 )
 
         txt.submit(
             on_submit,
             inputs=[chat, txt, dev_mode],
-            outputs=[chat, txt, status, logs_md, logs_json],
+            # 🆕 新增 reasoning_md 到 outputs
+            outputs=[chat, txt, status, logs_md, logs_json, reasoning_md],
             queue=True,
             show_progress=True,
             concurrency_limit="default",
@@ -281,18 +317,21 @@ def create_gradio_app():
         )
 
         def _clear(dev_flag):
+            # 🆕 新增返回 reasoning_md 的清空状态
             return (
                 [],
                 "",
                 gr.update(visible=False),
                 gr.update(value="（本次尚无日志）"),
                 gr.update(value=None, visible=bool(dev_flag)),
+                gr.update(value="（本次尚无思考记录）"),  # 🆕 清空思考过程
             )
 
         clear_btn.click(
             _clear,
             inputs=[dev_mode],
-            outputs=[chat, txt, status, logs_md, logs_json],
+            # 🆕 新增 reasoning_md 到 outputs
+            outputs=[chat, txt, status, logs_md, logs_json, reasoning_md],
             queue=False,
         )
 

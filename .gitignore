@@ -22,5 +22,12 @@ env/
 logs/
 *.log
 cache/
+
 # 一体版代码
 langchain-1.0版本更新测试.py
+
+# 测试文件（reasoning 测试）
+test_reasoning.py
+reasoning_debug.txt
+reasoning_full_output.txt
+reasoning_structure.json
