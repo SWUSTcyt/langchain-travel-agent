@@ -1,6 +1,7 @@
 """Gradio 前端界面（流式输出 + 过程日志）"""
 
 from datetime import datetime
+from pathlib import Path
 from typing import List, Tuple, Any, Dict
 
 import gradio as gr
@@ -141,14 +142,40 @@ def _event_to_summary(event: dict) -> str:
     return f"[{_fmt_ts()}] 📎 {rounds_info}事件 {_safe_trunc(str(list(event.keys())))}"
 
 
+def _format_response_with_reasoning_separated(content: str, reasoning: str) -> str:
+    """将思考过程和最终回复分离展示为结构化的消息内容"""
+    parts = []
+
+    # 添加思考过程部分（使用 HTML details 可折叠）
+    if reasoning:
+        parts.append(f"""<details>
+<summary><b>💭 AI 思考过程</b></summary>
+
+{reasoning}
+
+</details>""")
+
+    # 添加分隔线
+    if reasoning:
+        parts.append("\n---\n")
+
+    # 添加最终回复部分
+    if content:
+        parts.append(f"""## 最终答案
+
+{content}""")
+
+    return "".join(parts)
+
+
 def stream_answer(
     user_text: str, chat_history, dev_mode_flag: bool
-) -> Tuple[str, str, str, Any]:  # 🆕 返回 4 个值：content, logs, reasoning, raw_events
-    """使用 agent.stream 做增量推送，并生成摘要 / JSON 日志 + reasoning"""
+) -> Tuple[str, str, str, Any]:  # 返回 4 个值：reasoning, final_content, logs, raw_events
+    """使用 agent.stream 做增量推送，返回分离的思考过程和最终结果"""
     summaries: List[str] = []
     raw_events: List[Dict[str, Any]] = []
     final_text = ""
-    reasoning_text = ""  # 🆕 累积思考过程
+    reasoning_text = ""  # 累积思考过程
     tool_rounds_tracker = 0
     last_batch_prefix_seen = None
 
@@ -201,7 +228,7 @@ def stream_answer(
             elif "messages" in event:
                 msgs = event["messages"]
 
-        # 🆕 提取 reasoning 和 content
+        # 提取 reasoning 和 content，并在有更新时立即 yield（流式效果）
         if isinstance(msgs, list):
             for msg in msgs:
                 if isinstance(msg, AIMessage):
@@ -215,11 +242,12 @@ def stream_answer(
                     if hasattr(msg, 'content') and msg.content:
                         final_text = msg.content
 
+        # 每次事件都输出一次，保证流式效果
         md_text = "  \n".join(summaries) if summaries else "（本次尚无日志）"
         yield (
-            final_text or "",
+            reasoning_text,  # 思考过程（累积）
+            final_text,      # 最终答案（累积）
             md_text,
-            reasoning_text or "",  # 🆕 思考过程
             raw_events if dev_mode_flag else None,
         )
 
@@ -234,104 +262,184 @@ def stream_answer(
                 # 提取 content
                 final_text = msg.content if hasattr(msg, 'content') else str(msg)
 
-                # 🆕 兜底时也提取 reasoning
+                # 兜底时也提取 reasoning
                 if hasattr(msg, 'additional_kwargs') and isinstance(msg.additional_kwargs, dict):
                     reasoning_text = msg.additional_kwargs.get('reasoning_content', '')
                 break
 
+    # 最终输出
     md_text = "  \n".join(summaries) if summaries else "（本次尚无日志）"
-    yield (final_text, md_text, reasoning_text, raw_events if dev_mode_flag else None)
+    yield (reasoning_text, final_text, md_text, raw_events if dev_mode_flag else None)
+
+
+def load_app_css() -> str:
+    """读取外置自定义样式（assets/custom.css），与逻辑分离；缺失时降级为空。"""
+    css_path = Path(__file__).parent / "assets" / "custom.css"
+    try:
+        return css_path.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+
+# 首屏示例问题，降低用户上手门槛
+EXAMPLE_PROMPTS = [
+    "规划成都 2 天美食 + 人文轻松路线",
+    "杭州周末 1 天，西湖周边 citywalk + 咖啡",
+    "北京 3 天，故宫长城经典线，带交通和天气",
+]
+
+# 现代化主题（Gradio 6：theme 在 launch() 时应用，见 main.py）
+APP_THEME = gr.themes.Soft(
+    primary_hue="teal",
+    secondary_hue="blue",
+    neutral_hue="slate",
+    radius_size="lg",
+)
 
 
 def create_gradio_app():
-    """创建并返回 Gradio Blocks 应用"""
-    with gr.Blocks() as demo:
-        gr.Markdown("## 旅游助手（MCP + Qwen + LangChain Agent）")
-        chat = gr.Chatbot(height=480, label="对话")
-        txt = gr.Textbox(placeholder="输入需求，如：规划成都2天美食+人文轻松路线…")
-        clear_btn = gr.Button("清空")
+    """创建并返回 Gradio Blocks 应用（现代化主题 + 双栏布局，业务逻辑不变）
+
+    注意：Gradio 6 起 theme/css 在 launch() 时传入（见 main.py），不再传给 Blocks。
+    """
+    with gr.Blocks(title="旅游助手") as demo:
+        # 顶部品牌区
+        gr.HTML(
+            """
+            <div id="ta-header">
+              <h1>🧭 旅游助手</h1>
+              <p>基于 LangChain Agent · 通义千问 Qwen · 高德地图 MCP，为你并行规划行程</p>
+              <div class="ta-tags">
+                <span class="ta-tag">POI 搜索</span>
+                <span class="ta-tag">路线规划</span>
+                <span class="ta-tag">天气查询</span>
+                <span class="ta-tag">AI 思考过程</span>
+              </div>
+            </div>
+            """
+        )
+
+        # 隐藏占位组件，保持事件输出签名不变
         status = gr.Markdown("", visible=False)
 
-        dev_mode = gr.Checkbox(label="开发者模式（显示原始事件 JSON）", value=False)
+        with gr.Row(elem_id="ta-main-row"):
+            # ===== 主对话区 =====
+            with gr.Column(scale=3, elem_id="ta-chat-card"):
+                chat = gr.Chatbot(
+                    height=520,
+                    label="对话",
+                    elem_id="ta-chatbot",
+                    layout="bubble",
+                    buttons=["copy"],
+                    placeholder="👋 你好！告诉我你的出行计划，我来帮你规划行程。",
+                )
+                with gr.Row():
+                    txt = gr.Textbox(
+                        placeholder="输入需求，如：规划成都 2 天美食 + 人文轻松路线…",
+                        scale=8,
+                        lines=1,
+                        max_lines=4,
+                        show_label=False,
+                        autofocus=True,
+                        elem_id="ta-input",
+                    )
+                    send_btn = gr.Button(
+                        "发送", scale=1, variant="primary", elem_id="ta-send"
+                    )
+                with gr.Row():
+                    clear_btn = gr.Button("🗑 清空对话", elem_id="ta-clear")
+                gr.Examples(examples=EXAMPLE_PROMPTS, inputs=txt, label="试试这些")
 
-        with gr.Accordion("过程与日志（点击展开）", open=False):
-            logs_md = gr.Markdown(label="摘要日志", value="（本次尚无日志）")
-            logs_json = gr.JSON(
-                label="原始事件（仅开发者模式显示）",
-                visible=False,
-            )
-
-        # 🆕 新增：思考过程展示区域
-        with gr.Accordion("💭 AI 思考过程（点击展开）", open=False):
-            reasoning_md = gr.Markdown(
-                label="深度推理链",
-                value="（本次尚无思考记录）",
-            )
-            gr.Markdown("""
-## 说明
-
-这里展示了 AI 的内部推理过程，包括：
-
-- **🎯 意图理解**：如何分析和理解你的需求
-- **🔍 策略规划**：决定调用哪些工具以及调用顺序
-- **🧩 信息整合**：如何根据工具结果组织最终回复
-- **⚡ 推理链**：完整的思考步骤和逻辑
-
-*注：思考过程仅供参考，最终以正式回复为准*
-            """)
+            # ===== 侧栏：开发者与过程日志 =====
+            with gr.Column(scale=1, elem_id="ta-side-card"):
+                gr.Markdown("### ⚙️ 调试面板")
+                dev_mode = gr.Checkbox(
+                    label="开发者模式（显示原始事件 JSON）", value=False
+                )
+                with gr.Accordion("📋 过程与日志", open=False):
+                    logs_md = gr.Markdown(label="摘要日志", value="（本次尚无日志）")
+                    logs_json = gr.JSON(
+                        label="原始事件（仅开发者模式显示）",
+                        visible=False,
+                    )
 
         def on_submit(history, user_text, dev_mode_flag):
             history = history or []
+            # 添加用户消息
             history.append({"role": "user", "content": user_text})
+            # 添加一个 AI 消息块，包含思考过程和最终答案，但视觉上分离
             history.append({"role": "assistant", "content": ""})
 
-            # 🆕 接收 4 个返回值：content, logs, reasoning, raw_events
-            for partial_text, md_logs, reasoning, raw in stream_answer(
+            # 接收 4 个返回值：reasoning, final_content, logs, raw_events
+            has_final_content = False  # 跟踪是否已开始输出最终结果
+            for reasoning, final_content, md_logs, raw in stream_answer(
                 user_text, history, dev_mode_flag
             ):
-                history[-1]["content"] = partial_text
+                # 检测是否开始有最终结果
+                if final_content and not has_final_content:
+                    has_final_content = True
+
+                # 构建完整消息（包含思考过程和最终答案，用分隔符分离）
+                message_parts = []
+
+                # 添加思考过程部分（可折叠，默认展开/收起取决于是否有最终结果）
+                if reasoning:
+                    is_open = " open" if not has_final_content else ""
+                    message_parts.append(f"""<details{is_open}>
+<summary><b>💭 AI 思考过程</b></summary>
+
+{reasoning}
+
+</details>""")
+
+                # 添加分隔线和最终答案部分
+                if final_content:
+                    if reasoning:  # 只在有思考过程时添加分隔线
+                        message_parts.append("\n\n---\n\n")  # 前后各加空行确保分隔线正确渲染
+                    message_parts.append(f"""## 最终答案
+
+{final_content}""")
+
+                # 合并为单一消息
+                history[-1]["content"] = "".join(message_parts)
+
                 json_payload = raw if dev_mode_flag else None
 
-                # 🆕 格式化 reasoning（添加标题和样式）
-                formatted_reasoning = reasoning if reasoning else "（本次尚无思考记录）"
-
-                # 🆕 返回 6 个值：history, txt, status, logs_md, logs_json, reasoning_md
+                # 返回 5 个值：history, txt, status, logs_md, logs_json
                 yield (
                     history,
                     gr.update(value="", interactive=True),
                     gr.update(visible=False),
                     gr.update(value=md_logs),
                     gr.update(value=json_payload, visible=bool(dev_mode_flag)),
-                    gr.update(value=formatted_reasoning),  # 🆕 思考过程
                 )
 
-        txt.submit(
-            on_submit,
+        # 提交：回车与「发送」按钮共用同一处理逻辑
+        submit_kwargs = dict(
+            fn=on_submit,
             inputs=[chat, txt, dev_mode],
-            # 🆕 新增 reasoning_md 到 outputs
-            outputs=[chat, txt, status, logs_md, logs_json, reasoning_md],
+            outputs=[chat, txt, status, logs_md, logs_json],
             queue=True,
             show_progress=True,
             concurrency_limit="default",
             concurrency_id="chat",
         )
+        txt.submit(**submit_kwargs)
+        send_btn.click(**submit_kwargs)
 
         def _clear(dev_flag):
-            # 🆕 新增返回 reasoning_md 的清空状态
             return (
                 [],
                 "",
                 gr.update(visible=False),
                 gr.update(value="（本次尚无日志）"),
                 gr.update(value=None, visible=bool(dev_flag)),
-                gr.update(value="（本次尚无思考记录）"),  # 🆕 清空思考过程
             )
 
         clear_btn.click(
             _clear,
             inputs=[dev_mode],
-            # 🆕 新增 reasoning_md 到 outputs
-            outputs=[chat, txt, status, logs_md, logs_json, reasoning_md],
+            outputs=[chat, txt, status, logs_md, logs_json],
             queue=False,
         )
 

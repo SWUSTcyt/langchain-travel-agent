@@ -1,5 +1,92 @@
 # 更新日志 (CHANGELOG)
 
+## [v1.2.1] - 2026-06-26
+
+### 文档更新与版本同步
+
+#### 1. **ARCHITECTURE.md 文件结构更新**
+- 更新文件结构树，反映最新的项目组织
+- 新增 `assets/custom.css` 自定义样式文件
+- 新增 `docs/issues-log.md` 问题记录文档
+- 新增 `.claude/skills/` 和 `.cursor/skills/` 两层 skill 目录结构
+- 更新 `main.py` 和 `ui.py` 的功能说明注释
+
+#### 2. **版本同步与 Git 提交**
+- 统一提交所有 v1.2.0 变更到 GitHub
+- 包括：P0 修复、前端现代化、Skills 体系建设、文档对齐
+- 确保代码库与文档保持一致
+
+### 📁 文件变更
+
+#### 修改文件
+- `docs/ARCHITECTURE.md` - 更新文件结构树，反映最新项目组织
+
+---
+
+## [v1.2.0] - 2026-06-26
+
+### P0 Bug 修复
+
+#### 1. **enforce_city_on_tools city 注入修复**
+- **问题**: `enforce_city_on_tools` 使用 `req.override(tool_input=params)` 注入城市参数，但 LangGraph 的 `override()` 只支持 `tool_call` 字段，异常被 `except: pass` 吞掉，导致 city 未注入、MCP 工具报错
+- **修法**: 改为 `req.override(tool_call=modified_call)`，正确构造完整的 tool_call dict，区分 dict/对象两种 `tc` 类型；从模块级缓存 `_target_cities_cache` 读取城市
+- **验证**: E2E 全链路通过 — 3 个工具调用全部注入 `city=成都`，MCP 正常返回（maps_text_search 1396+6524 字符，maps_weather 1600 字符）
+
+#### 2. **模型名 403 修复**
+- **问题**: `qwen-turbo-latest` 返回 403 AccessDenied，被通义 SDK 包装成 `KeyError: 'request'` 掩盖真实错误
+- **修法**: `agent.py` 第 37 行 `qwen-turbo-latest` → `qwen-turbo`
+
+### 前端现代化（Gradio 6 适配）
+
+#### 3. **UI 重构**
+- 主题：`gr.themes.Soft`（teal + blue + slate），CSS 在 `launch()` 时注入
+- 布局：顶部品牌区 + 双栏（对话区 3 : 侧栏 1）+ 响应式断点（`@media max-width: 860px`）
+- Chatbot：气泡布局、`buttons=["copy"]`、placeholder 空态提示
+- 示例问题：`gr.Examples` 降低上手门槛
+- 调试面板：开发者模式 JSON + 过程日志折叠
+
+#### 4. **Gradio 6 API 迁移**
+- `theme`/`css` 从 `gr.Blocks()` 移到 `launch()`
+- `gr.Chatbot` 去掉 `type="messages"`（Gradio 6 默认 messages 格式）
+- `show_copy_button=True` → `buttons=["copy"]`
+
+### Skills 体系建设
+
+#### 5. **两层 skill 安装**
+- **playbook 流程 skill（7 个）**: plan-spec / plan-breakdown / execute-implement / verify-test / verify-review / observe-session / improve-retro
+- **项目自有 skill（2 个）**: understand（架构分析）/ feature（功能开发）
+- 安装到 `.cursor/skills/` + `.claude/skills/`，两层结构统一
+
+#### 6. **项目 skill 格式优化**
+- understand / feature 按 playbook 写作规范重写：description 改为 `Use when...` 触发格式；正文补「概述/何时使用/流程/产出/常见错误/参考」标准节
+- 新增常见错误：禁止 `except: pass` 裸吞异常、改动后文档必须同步
+
+### 文档对齐
+
+#### 7. **ARCHITECTURE.md 修正 4 处 drift**
+- 模型名 `qwen-turbo-latest` → `qwen-turbo`（2 处）
+- 工具名 `searchPOI/getRoute/getWeather` → `maps_text_search/maps_direction_*/maps_weather`（Mermaid 图 + 事件流 + 工具列表，10+ 处）
+- `enforce_city_on_tools` 代码片段更新为 `req.override(tool_call=...)` + 模块级缓存
+- `stream_answer` 更新为 4 值返回 + reasoning 提取逻辑
+
+### 📁 文件变更
+
+#### 修改文件
+- `agent.py` - 模型名 qwen-turbo-latest → qwen-turbo
+- `middleware.py` - enforce_city_on_tools 修复（req.override + dict/对象兼容）
+- `ui.py` - 前端现代化（主题/布局/Chatbot/响应式/Gradio 6 适配）
+- `main.py` - launch() 注入 theme + css
+- `PLAN.md` - 状态同步（P0 已修 + E2E 通过 + skills 已安装）
+- `docs/ARCHITECTURE.md` - 修正 4 处 drift
+- `docs/issues-log.md` - P0 标记已修 + 新增记录
+
+#### 新增文件
+- `assets/custom.css` - 自定义样式（旅行主题 + 响应式断点）
+- `.cursor/skills/` - 9 个 skill（playbook 7 + 项目 2）
+- `.claude/skills/plan-spec/` 等 7 个 playbook skill
+
+---
+
 ## [v1.1.0] - 2026-01-22
 
 ### 🆕 新增功能

@@ -34,7 +34,7 @@ def create_travel_agent():
     # 2) 配置 Qwen 模型（支持“深度思考”+ 流式输出）
     qwen = ChatTongyi(
         dashscope_api_key=DASHSCOPE_API_KEY,
-        model="qwen-turbo-latest",
+        model="qwen-turbo",
         streaming=True,
         model_kwargs={
             "enable_thinking": Config.ENABLE_THINKING,

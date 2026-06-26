@@ -32,6 +32,10 @@ from tools import get_tool_names_sorted, get_global_tools
 
 logger = logging.getLogger(__name__)
 
+# 模块级缓存：存储当前轮次的目标城市（供 wrap_tool_call 中间件使用）
+_target_cities_cache: set = set()
+_original_input_cache: str = ""
+
 
 # === 工具函数 ===
 
@@ -148,17 +152,15 @@ def pin_cities_and_adcodes(state: AgentState, runtime) -> dict | None:
     # 提取城市
     cities = extract_cities(query) if query else []
 
-    try:
-        if query:
-            runtime.state["__original_input__"] = query
-        runtime.state["target_cities"] = set(cities)
-        runtime.state["target_cities_source_text"] = query
-        runtime.state["allowed_adcodes"] = {}
-        runtime.state["__debug_last_query__"] = query
-        runtime.state["__debug_cities__"] = list(cities)
-        runtime.state["__debug_state_keys__"] = state_keys
-    except Exception:
-        pass
+    # 写入模块级缓存
+    global _target_cities_cache, _original_input_cache
+    _target_cities_cache = set(cities)
+    _original_input_cache = query
+
+    logger.info(
+        "[PinCities] 提取城市: %s",
+        cities if cities else "(未提取到)",
+    )
 
     if cities:
         city_tips = (
@@ -194,16 +196,18 @@ def pin_cities_and_adcodes(state: AgentState, runtime) -> dict | None:
     sys_msg = SystemMessage(
         content=(
             "你是旅行规划助手。需要本地信息时优先使用 MCP(amap-maps) 的工具："
-            "searchPOI / getRoute / getWeather。风格：\"轻松不赶\"；"
+            "maps_text_search（搜索POI）/ maps_direction_*（路线规划）/ maps_weather（天气查询）。"
+            "风格：\"轻松不赶\"；"
             "输出包含可验证的检索要点（如POI名、路线段、adcode等）。"
             "\n【并行调用策略】强烈建议在同一轮中并行调用多个工具以提升效率："
-            "\n- 示例：同时调用 searchPOI（获取景点）+ getRoute（规划路线）+ getWeather（查询天气）"
+            "\n- 示例：同时调用 maps_text_search（获取景点）+ maps_direction_driving（规划路线）+ maps_weather（查询天气）"
             "\n- 优势：一次性收集完整信息，减少往返轮次"
             "\n【停止条件-必须遵守】满足以下任一条件时，必须立即停止调用工具，直接给出最终答案："
             "\n1. 已获取关键信息：目标城市、2-3个POI、基本路线信息"
             f"\n2. 工具调用达到{Config.MAX_TOOL_ROUNDS}回合上限（严格限制，因启用并行调用）"
             "\n3. 收到\"强制停止\"提示"
             "\n【执行要求】达到停止条件后，必须直接输出文本答案，禁止继续调用工具。若信息不足，说明\"仍需补充的信息\"。"
+            "\n【参数要求】调用地图工具时，必须传入 city 参数（如 city=\"成都\"），否则工具会报错。"
             + city_tips
             + debug_info
         )
@@ -358,64 +362,65 @@ def enforce_city_on_tools(req, handler):
     """工具调用时强制 city/adcode 匹配目标城市集（仅改参数，不改工具名）"""
     try:
         tool_name = ""
-        if hasattr(req, "tool_call"):
-            tc = req.tool_call
-            if hasattr(tc, "name"):
-                tool_name = (tc.name or "").lower()
-            elif hasattr(tc, "function") and hasattr(tc.function, "name"):
-                tool_name = (tc.function.name or "").lower()
-            elif isinstance(tc, dict):
-                tool_name = (
-                    (tc.get("name") or tc.get("function", {}).get("name") or "")
-                    .lower()
-                )
+        tc = req.tool_call if hasattr(req, "tool_call") else None
+        if tc is None:
+            return handler(req)
 
+        # 获取工具名
+        if isinstance(tc, dict):
+            tool_name = (tc.get("name") or tc.get("function", {}).get("name") or "").lower()
+        elif hasattr(tc, "name"):
+            tool_name = (tc.name or "").lower()
+
+        # 仅对地图相关工具生效
         if not any(
             k in tool_name for k in ("map", "amap", "poi", "route", "weather", "direction", "distance")
         ):
             return handler(req)
 
-        cities = set()
-        if hasattr(req, "runtime") and hasattr(req.runtime, "state"):
-            cities = set(req.runtime.state.get("target_cities") or [])
+        # 获取目标城市（从模块级缓存读取）
+        cities = _target_cities_cache
 
         if not cities:
+            logger.debug("[EnforceCity] target_cities 为空，跳过注入（工具: %s）", tool_name)
             return handler(req)
 
         pinned_city = next(iter(cities))
 
+        # 从 tool_call 中提取参数
         params = {}
-        try:
-            if hasattr(req, "tool_input") and isinstance(req.tool_input, dict):
-                params = dict(req.tool_input)
-            elif hasattr(req, "tool_call"):
-                tc = req.tool_call
-                if hasattr(tc, "args") and isinstance(tc.args, dict):
-                    params = dict(tc.args)
-                elif hasattr(tc, "function") and hasattr(tc.function, "arguments"):
-                    import json
+        if isinstance(tc, dict):
+            params = dict(tc.get("args") or {})
+        elif hasattr(tc, "args") and isinstance(tc.args, dict):
+            params = dict(tc.args)
 
-                    args = tc.function.arguments
-                    if isinstance(args, str):
-                        params = json.loads(args) if args else {}
-                    elif isinstance(args, dict):
-                        params = dict(args)
-        except Exception:
-            params = {}
-
+        # 注入城市参数
         params["city"] = pinned_city
         params["cityd"] = pinned_city
         if "adcode" in params:
             params["adcode"] = ""
 
-        if hasattr(req, "override"):
-            req = req.override(tool_input=params)
+        # 用正确的 API 修改 tool_call（只支持 tool_call 参数）
+        if isinstance(tc, dict):
+            modified_call = {**tc, "args": params}
         else:
-            if hasattr(req, "tool_input"):
-                req.tool_input = params
+            # tc 是对象（如 ToolCall dataclass），需要构造新的 dict
+            modified_call = {
+                "name": getattr(tc, "name", ""),
+                "args": params,
+                "id": getattr(tc, "id", ""),
+                "type": getattr(tc, "type", "tool_call"),
+            }
 
-    except Exception:
-        pass
+        req = req.override(tool_call=modified_call)
+        logger.info(
+            "[EnforceCity] 工具 %s 已注入 city=%s",
+            tool_name,
+            pinned_city,
+        )
+
+    except Exception as e:
+        logger.warning("[EnforceCity] 城市注入异常（继续执行）：%s", e)
 
     return handler(req)
 

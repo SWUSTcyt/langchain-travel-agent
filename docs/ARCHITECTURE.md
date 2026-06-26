@@ -64,7 +64,7 @@
 │                   Agent 核心层 (agent.py)                      │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │ ChatTongyi (Qwen Model)                                 │  │
-│  │  - model: qwen-turbo-latest                            │  │
+│  │  - model: qwen-turbo                                   │  │
 │  │  - streaming: True                                     │  │
 │  │  - enable_thinking: True                               │  │
 │  └────────────────────────────────────────────────────────┘  │
@@ -112,25 +112,42 @@
                      ▼
 ┌──────────────────────────────────────────────────────────────┐
 │              外部 MCP Server (高德地图)                         │
-│  - searchPOI (POI搜索)                                         │
-│  - getRoute (路线规划)                                          │
-│  - getWeather (天气查询)                                        │
+│  - maps_text_search (POI搜索)                                   │
+│  - maps_direction_* (路线规划)                                  │
+│  - maps_weather (天气查询)                                      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 ### 文件结构
 
 ```
-├── main.py                   # 应用启动入口
+├── main.py                   # 应用启动入口（Gradio 6：theme/css 在 launch() 传入）
 ├── config.py                 # 配置管理与常量定义
-├── agent.py                  # Agent 创建与配置
-├── tools.py                  # MCP 工具加载与异步包装
-├── middleware.py             # LangChain 中间件集合
-├── ui.py                     # Gradio Web UI 实现
+├── agent.py                  # Agent 创建与配置（Qwen 模型 + 中间件挂载）
+├── tools.py                  # MCP 工具加载与异步包装（常驻事件循环）
+├── middleware.py             # LangChain 中间件集合（8 个自定义中间件）
+├── ui.py                     # Gradio Web UI 实现（现代化主题 + 双栏布局）
 ├── requirements.txt          # 依赖清单
 ├── .env                      # 环境变量配置(未提交)
 ├── .env.example              # 环境变量模板
-└── readme.md                 # 项目说明文档
+├── readme.md                 # 项目说明文档
+├── assets/
+│   └── custom.css            # 自定义样式（旅行主题 + 响应式断点）
+├── docs/
+│   ├── ARCHITECTURE.md       # 本文档（项目架构详解）
+│   ├── issues-log.md         # 问题记录与修复日志
+│   └── spec/                 # 规范文档
+├── .claude/skills/           # Claude Code Skill（9 个）
+│   ├── understand/           # 架构分析 Skill
+│   ├── feature/              # 功能开发 Skill
+│   ├── plan-spec/            # 需求规格评审
+│   ├── plan-breakdown/       # 任务拆分
+│   ├── execute-implement/    # Issue 开发
+│   ├── verify-test/          # 测试编写
+│   ├── verify-review/        # 代码审查
+│   ├── observe-session/      # 会话观测
+│   └── improve-retro/        # 复盘改进
+└── .cursor/skills/           # Cursor Skill（与 .claude 同步）
 ```
 
 ---
@@ -269,7 +286,7 @@ def create_travel_agent():
     # 2) 配置 Qwen 模型(支持"深度思考"+ 流式输出)
     qwen = ChatTongyi(
         dashscope_api_key=DASHSCOPE_API_KEY,
-        model="qwen-turbo-latest",
+        model="qwen-turbo",
         streaming=True,
         model_kwargs={
             "enable_thinking": Config.ENABLE_THINKING,
@@ -369,26 +386,33 @@ LangChain 1.0 引入了强大的中间件机制,本项目实现了 **8 个自定
       req.runtime.state["tool_rounds"] = current_round
   ```
 
-**enforce_city_on_tools** (`middleware.py:356-421`)
+**enforce_city_on_tools** (`middleware.py:360-425`)
 - **功能**: 工具调用时强制 city/adcode 匹配目标城市集
 - **核心逻辑**:
   ```python
-  # 仅对地图相关工具生效
-  if not any(k in tool_name for k in ("map", "amap", "poi", "route", "weather")):
+  # 仅对地图相关工具生效（含 direction、distance）
+  if not any(k in tool_name for k in ("map", "amap", "poi", "route", "weather", "direction", "distance")):
       return handler(req)
 
-  # 获取目标城市
-  cities = set(req.runtime.state.get("target_cities") or [])
+  # 从模块级缓存获取目标城市（由 pin_cities_and_adcodes 写入）
+  cities = _target_cities_cache
   if not cities:
       return handler(req)
 
   pinned_city = next(iter(cities))
 
-  # 强制覆盖参数
+  # 提取并注入城市参数
   params["city"] = pinned_city
   params["cityd"] = pinned_city
   if "adcode" in params:
-      params["adcode"] = ""  # 清空 adcode,让 MCP Server 自动推断
+      params["adcode"] = ""
+
+  # 用 req.override(tool_call=...) 正确修改 tool_call
+  if isinstance(tc, dict):
+      modified_call = {**tc, "args": params}
+  else:
+      modified_call = {"name": tc.name, "args": params, "id": tc.id, "type": "tool_call"}
+  req = req.override(tool_call=modified_call)
   ```
 
 #### 3. wrap_model_call 阶段
@@ -410,7 +434,7 @@ LangChain 1.0 引入了强大的中间件机制,本项目实现了 **8 个自定
 
 **fix_tool_calls_in_aimessage** (`middleware.py:475-634`)
 - **功能**: 修正 AIMessage 中被拼接的工具名,支持拆分为多个 `tool_call`
-- **问题背景**: 通义千问模型在并行调用时可能将工具名拼接(如 `"searchPOIgetWeather"`)
+- **问题背景**: 通义千问模型在并行调用时可能将工具名拼接(如 `"maps_text_searchmaps_weather"`)
 - **修复策略**: 最长前缀匹配
   ```python
   # 获取工具名列表(按长度降序)
@@ -468,14 +492,17 @@ LangChain 1.0 引入了强大的中间件机制,本项目实现了 **8 个自定
 
 ### 1. 流式输出实现
 
-**关键代码位置**: `ui.py:144-235`
+**关键代码位置**: `ui.py:171-272`
 
 ```python
-def stream_answer(user_text: str, chat_history, dev_mode_flag: bool):
-    """使用 agent.stream 做增量推送,并生成摘要 / JSON 日志"""
+def stream_answer(
+    user_text: str, chat_history, dev_mode_flag: bool
+) -> Tuple[str, str, str, Any]:  # 返回 4 个值：reasoning, final_content, logs, raw_events
+    """使用 agent.stream 做增量推送，返回分离的思考过程和最终结果"""
     summaries: List[str] = []
     raw_events: List[Dict[str, Any]] = []
     final_text = ""
+    reasoning_text = ""  # 累积思考过程
     tool_rounds_tracker = 0
     last_batch_prefix_seen = None
 
@@ -483,48 +510,22 @@ def stream_answer(user_text: str, chat_history, dev_mode_flag: bool):
         {"messages": [HumanMessage(content=user_text)]},
         config={"recursion_limit": 40},
     ):
-        # 追踪工具轮次
-        if isinstance(event, dict):
-            current_batch_prefix = None
-            # ... 批次识别逻辑 ...
+        # ... 批次识别与轮次追踪（同上）...
 
-            if current_batch_prefix and current_batch_prefix != last_batch_prefix_seen:
-                tool_rounds_tracker += 1
-                last_batch_prefix_seen = current_batch_prefix
-
-            event_with_rounds = dict(event)
-            event_with_rounds["__tool_rounds__"] = tool_rounds_tracker
-            raw_events.append(event_with_rounds)
-
-        # 生成摘要日志
-        try:
-            if isinstance(event, dict):
-                summaries.append(_event_to_summary(event))
-        except Exception:
-            pass
-
-        # 提取最新 AI 回复
-        msgs = None
-        if isinstance(event, dict):
-            if "model" in event and isinstance(event["model"], dict):
-                msgs = event["model"].get("result") or event["model"].get("messages")
-            elif "messages" in event:
-                msgs = event["messages"]
-
+        # 提取 reasoning 和 content
         if isinstance(msgs, list):
-            last_ai = next(
-                (m for m in reversed(msgs) if isinstance(m, AIMessage)), None
-            )
-            if last_ai:
-                final_text = last_ai.content
+            for msg in msgs:
+                if isinstance(msg, AIMessage):
+                    if hasattr(msg, 'additional_kwargs') and isinstance(msg.additional_kwargs, dict):
+                        reasoning_chunk = msg.additional_kwargs.get('reasoning_content', '')
+                        if reasoning_chunk:
+                            reasoning_text += reasoning_chunk
+                    if hasattr(msg, 'content') and msg.content:
+                        final_text = msg.content
 
-        # 流式 yield
-        md_text = "  \n".join(summaries) if summaries else "(本次尚无日志)"
-        yield (
-            final_text or "",
-            md_text,
-            raw_events if dev_mode_flag else None,
-        )
+        # 流式 yield（4 个值）
+        md_text = "  \n".join(summaries) if summaries else "（本次尚无日志）"
+        yield (reasoning_text, final_text, md_text, raw_events if dev_mode_flag else None)
 ```
 
 ### 2. 城市提取正则
@@ -599,24 +600,24 @@ sequenceDiagram
     Agent->>Middleware: pin_query_from_messages
     Agent->>Middleware: cost_guard
     Agent->>Qwen Model: 调用模型
-    Qwen Model-->>Agent: AIMessage(tool_calls=["searchPOIgetRoute"])
+    Qwen Model-->>Agent: AIMessage(tool_calls=["maps_text_searchmaps_direction_driving"])
 
     Note over Agent,Middleware: after_model 阶段
     Agent->>Middleware: fix_tool_calls_in_aimessage
-    Middleware->>Middleware: 修正工具名: ["searchPOI", "getRoute"]
+    Middleware->>Middleware: 修正工具名: ["maps_text_search", "maps_direction_driving"]
 
     Note over Agent,MCP Tools: wrap_tool_call 阶段(并行)
-    Agent->>Middleware: track_tool_budget(searchPOI)
+    Agent->>Middleware: track_tool_budget(maps_text_search)
     Middleware->>Middleware: 轮次+1: 1/1
-    Agent->>Middleware: enforce_city_on_tools(searchPOI)
+    Agent->>Middleware: enforce_city_on_tools(maps_text_search)
     Middleware->>Middleware: 强制注入 city="成都"
-    Agent->>MCP Tools: searchPOI(city="成都", keyword="美食")
+    Agent->>MCP Tools: maps_text_search(city="成都", keyword="美食")
     MCP Tools-->>Agent: ToolMessage(POI列表)
 
-    Agent->>Middleware: track_tool_budget(getRoute)
+    Agent->>Middleware: track_tool_budget(maps_direction_driving)
     Middleware->>Middleware: 同批次,不增加轮次
-    Agent->>Middleware: enforce_city_on_tools(getRoute)
-    Agent->>MCP Tools: getRoute(city="成都", origin=..., destination=...)
+    Agent->>Middleware: enforce_city_on_tools(maps_direction_driving)
+    Agent->>MCP Tools: maps_direction_driving(city="成都", origin=..., destination=...)
     MCP Tools-->>Agent: ToolMessage(路线信息)
 
     Note over Agent,Qwen Model: 第二次模型调用
@@ -649,8 +650,8 @@ sequenceDiagram
         {
           "type": "AIMessage",
           "tool_calls": [
-            {"name": "searchPOI", "id": "call_123"},
-            {"name": "getRoute", "id": "call_123_split_1"}
+            {"name": "maps_text_search", "id": "call_123"},
+            {"name": "maps_direction_driving", "id": "call_123_split_1"}
           ]
         }
       ]
@@ -660,8 +661,8 @@ sequenceDiagram
   {
     "tools": {
       "messages": [
-        {"type": "ToolMessage", "name": "searchPOI", "content": "{...}"},
-        {"type": "ToolMessage", "name": "getRoute", "content": "{...}"}
+        {"type": "ToolMessage", "name": "maps_text_search", "content": "{...}"},
+        {"type": "ToolMessage", "name": "maps_direction_driving", "content": "{...}"}
       ]
     },
     "__tool_rounds__": 1

@@ -81,6 +81,16 @@ def _run_coroutine_sync(coro_func, *args, **kwargs):
     return anyio.run(_runner)
 
 
+def _safe_run_coro(coro_func, *args, **kwargs):
+    """安全执行协程，捕获异常并返回错误信息（而非抛出）"""
+    try:
+        return _run_coroutine_sync(coro_func, *args, **kwargs)
+    except Exception as e:
+        error_msg = str(e)
+        logger.warning("[Tool] 工具执行异常：%s", error_msg[:200])
+        return f"工具执行失败：{error_msg[:300]}。请检查参数是否正确（如是否缺少 city 参数），或基于已知信息直接回答。"
+
+
 def wrap_async_tool_to_sync(t):
     """把 MCP 异步工具 t 包成同步 LangChain Tool/StructuredTool
 
@@ -103,7 +113,7 @@ def wrap_async_tool_to_sync(t):
             if args_schema is not None:
 
                 def _sync(**kwargs):
-                    return _run_coroutine_sync(t.ainvoke, kwargs)
+                    return _safe_run_coro(t.ainvoke, kwargs)
 
                 return StructuredTool.from_function(
                     func=_sync,
@@ -115,7 +125,7 @@ def wrap_async_tool_to_sync(t):
             else:
 
                 def _sync(tool_input):
-                    return _run_coroutine_sync(t.ainvoke, tool_input)
+                    return _safe_run_coro(t.ainvoke, tool_input)
 
                 return Tool.from_function(
                     func=_sync,
@@ -130,7 +140,7 @@ def wrap_async_tool_to_sync(t):
     if args_schema is not None:
 
         def _sync(**kwargs):
-            return _run_coroutine_sync(coroutine, **kwargs)
+            return _safe_run_coro(coroutine, **kwargs)
 
         return StructuredTool.from_function(
             func=_sync,
@@ -142,7 +152,7 @@ def wrap_async_tool_to_sync(t):
     else:
 
         def _sync(tool_input):
-            return _run_coroutine_sync(coroutine, tool_input)
+            return _safe_run_coro(coroutine, tool_input)
 
         return Tool.from_function(
             func=_sync,

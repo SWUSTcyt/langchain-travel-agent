@@ -1,0 +1,114 @@
+/* 旅游助手前端现代化样式 —— 方案 A（Gradio 主题 + 自定义 CSS）
+   仅负责视觉表现，不涉及业务逻辑。配色：teal/emerald 旅行风 + 暖色点缀。 */
+
+:root {
+  --ta-brand-1: #0d9488;   /* teal-600 */
+  --ta-brand-2: #2563eb;   /* blue-600 */
+  --ta-accent: #f59e0b;    /* amber-500 */
+  --ta-bg-soft: #f6f9fb;
+  --ta-radius: 16px;
+  --ta-shadow: 0 6px 24px rgba(13, 148, 136, 0.10);
+}
+
+/* 整体容器收窄居中，留白更舒展 */
+.gradio-container {
+  max-width: 1180px !important;
+  margin: 0 auto !important;
+}
+
+/* ===== 顶部品牌区 ===== */
+#ta-header {
+  background: linear-gradient(120deg, var(--ta-brand-1), var(--ta-brand-2));
+  color: #fff;
+  border-radius: var(--ta-radius);
+  padding: 22px 26px;
+  margin-bottom: 14px;
+  box-shadow: var(--ta-shadow);
+}
+#ta-header h1 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 750;
+  letter-spacing: .5px;
+}
+#ta-header p {
+  margin: 6px 0 0;
+  opacity: .92;
+  font-size: .95rem;
+}
+#ta-header .ta-tags {
+  margin-top: 10px;
+}
+#ta-header .ta-tag {
+  display: inline-block;
+  background: rgba(255, 255, 255, .18);
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: .78rem;
+  margin-right: 8px;
+}
+
+/* ===== 卡片化面板 ===== */
+#ta-chat-card, #ta-side-card {
+  background: #fff;
+  border: 1px solid #eef2f5;
+  border-radius: var(--ta-radius);
+  padding: 12px;
+  box-shadow: var(--ta-shadow);
+}
+
+/* ===== 对话区 ===== */
+#ta-chatbot {
+  border: none !important;
+  background: var(--ta-bg-soft);
+  border-radius: 12px;
+}
+/* 消息气泡圆角与间距 */
+#ta-chatbot .message,
+#ta-chatbot .message-row {
+  border-radius: 14px !important;
+}
+/* AI 思考过程 details 美化 */
+#ta-chatbot details {
+  background: #eef7f6;
+  border-left: 3px solid var(--ta-brand-1);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+#ta-chatbot details summary {
+  cursor: pointer;
+  color: var(--ta-brand-1);
+  font-weight: 600;
+}
+
+/* ===== 输入区 ===== */
+#ta-input textarea {
+  border-radius: 12px !important;
+  font-size: .98rem;
+}
+#ta-send {
+  background: linear-gradient(120deg, var(--ta-brand-1), var(--ta-brand-2)) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 12px !important;
+  font-weight: 650 !important;
+}
+#ta-clear {
+  border-radius: 12px !important;
+}
+
+/* 侧栏标题 */
+#ta-side-card h3 {
+  margin: 4px 0 8px;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+/* ===== 响应式：移动端单栏 ===== */
+@media (max-width: 860px) {
+  #ta-main-row { flex-direction: column !important; }
+  #ta-header h1 { font-size: 1.25rem; }
+  .gradio-container { padding: 0 8px !important; }
+}
