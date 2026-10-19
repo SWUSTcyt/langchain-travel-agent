@@ -63,9 +63,9 @@
 ┌──────────────────────────────────────────────────────────────┐
 │                   Agent 核心层 (agent.py)                      │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │ ChatTongyi (Qwen Model)                                 │  │
-│  │  - model: qwen-turbo                                   │  │
-│  │  - streaming: True                                     │  │
+│  │ QwenChat（ChatOpenAI 兼容接口）                      │  │
+│  │  - model: qwen3.8-flash                                │  │
+│  │  - base: dashscope compatible-mode                     │  │
 │  │  - enable_thinking: True                               │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                             │                                  │
@@ -274,7 +274,7 @@ def wrap_async_tool_to_sync(t):
 
 ### Agent 创建流程
 
-**关键代码位置**: `agent.py:25-75`
+**关键代码位置**: `agent.py` 的 `QwenChat` 与 `create_travel_agent`
 
 ```python
 def create_travel_agent():
@@ -283,18 +283,15 @@ def create_travel_agent():
     # 1) 加载工具(MCP -> LangChain Tools)
     tools = load_tools()
 
-    # 2) 配置 Qwen 模型(支持"深度思考"+ 流式输出)
-    qwen = ChatTongyi(
-        dashscope_api_key=DASHSCOPE_API_KEY,
-        model="qwen-turbo",
+    # 2) 千问 3.8 flash，走兼容接口。思考开关由 cost_guard 写入 extra_body。
+    qwen = QwenChat(
+        api_key=DASHSCOPE_API_KEY,
+        base_url=DASHSCOPE_BASE_URL,
+        model=MODEL_NAME,
+        temperature=0.7,
+        top_p=0.8,
+        max_tokens=Config.MAX_OUTPUT_TOKENS,
         streaming=True,
-        model_kwargs={
-            "enable_thinking": Config.ENABLE_THINKING,
-            "incremental_output": Config.INCREMENTAL_OUTPUT,
-            "temperature": 0.7,
-            "top_p": 0.8,
-            "max_output_tokens": Config.MAX_OUTPUT_TOKENS,
-        },
     )
 
     qwen = qwen.bind_tools(tools)
@@ -386,20 +383,24 @@ LangChain 1.0 引入了强大的中间件机制,本项目实现了 **8 个自定
       req.runtime.state["tool_rounds"] = current_round
   ```
 
-**enforce_city_on_tools** (`middleware.py:360-425`)
+**enforce_city_on_tools** (`middleware.py`，准备逻辑在 `_city_pinned_request`)
 - **功能**: 工具调用时强制 city/adcode 匹配目标城市集
+- **城市来源**: `ui.stream_answer` 用本会话用户原话算出 `TripState`，以 `context=` 传入 agent（`create_agent(context_schema=TripState)`）；中间件读 `req.runtime.context`，没有时只从本次 state 的用户消息推算。不使用进程级变量，浏览器会话之间互不影响。
+- **沿用规则**: 城市由本句点名时强制覆盖；沿用更早轮次的城市时，只在模型没填 city 时补上（内置城市表不全，本句可能是表外城市）。
+- **失败关闭**: 准备阶段抛错返回停止说明，不调用工具；工具本身抛错原样上抛，不算注入失败。
 - **核心逻辑**:
   ```python
   # 仅对地图相关工具生效（含 direction、distance）
   if not any(k in tool_name for k in ("map", "amap", "poi", "route", "weather", "direction", "distance")):
-      return handler(req)
+      return req
 
-  # 从模块级缓存获取目标城市（由 pin_cities_and_adcodes 写入）
-  cities = _target_cities_cache
-  if not cities:
-      return handler(req)
+  trip = _resolve_trip(req.state, req.runtime)
+  if not trip.cities:
+      return req
 
-  pinned_city = next(iter(cities))
+  pinned_city = trip.cities[0]
+  if not trip.cities_from_current and params.get("city"):
+      return req
 
   # 提取并注入城市参数
   params["city"] = pinned_city
@@ -412,7 +413,7 @@ LangChain 1.0 引入了强大的中间件机制,本项目实现了 **8 个自定
       modified_call = {**tc, "args": params}
   else:
       modified_call = {"name": tc.name, "args": params, "id": tc.id, "type": "tool_call"}
-  req = req.override(tool_call=modified_call)
+  return req.override(tool_call=modified_call)
   ```
 
 #### 3. wrap_model_call 阶段

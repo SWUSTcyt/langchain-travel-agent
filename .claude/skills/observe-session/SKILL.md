@@ -24,11 +24,20 @@ description: 可观测性与模型降质检测。Use when 一次开发会话结�
 
 ## Session 摘要
 
-每次会话结束记录（用 `templates/session-summary-template.md`），存入 `docs/session-summaries/`：处理的 Issue、用的 Skill、错误与解法、Token 消耗、是否摸鱼。
+每次会话结束记录（用 `templates/session-summary-template.md`），存入 `docs/session-summaries/`。摘要按结构化字段写，把四类信息分开——**facts（可复核事实）/ decisions（负责人拍板）/ inferences（推断）/ external_blockers（外部待办）**——外加 `issue_id`、`spec_id`、`scope_changed`、`tests`（含 `baseline_sample_size`）、`secrets_or_customer_content_read`、`files_changed`、`commit_or_pr`、`next_owner`、`next_action`。
+
+**硬规则：**
+
+- `inference` 和 `external_blocker` 绝不写进 `verified`/`complete`/`done`。
+- 摘要至少要有 **1 条 fact + 1 条 next_action**；缺则标 `incomplete_observation` 并说明缺什么，不静默丢记录。
+
+**模板自检（启动时）：** 先确认 `templates/session-summary-template.md` 存在。若缺失，输出 `template_missing_fallback` 诊断，并用最小安全结构（上面的必填字段）手写摘要，不能因为模板不在就跳过记录。
 
 ## PR Summary
 
-每个 PR 末尾附摘要（用 `templates/pr-summary-template.md`）。
+每个 PR 末尾附摘要（用 `templates/pr-summary-template.md`）。有 UI 的产品必须含「用户视角（本次让用户能做什么）」一行，别只报「实现了什么技术功能」。
+
+**Milestone/阶段完成时**：除了逐 Issue 的完成情况，输出一段「用户使用路径增量」——从用户视角说清「现在能走通哪条使用路径」，并映射回 Spec 的关键路径步骤（见 plan-spec「用户使用路径与信息架构」），而非空泛描述。无 UI 的项目跳过。
 
 ## 模型降质检测
 
@@ -49,9 +58,10 @@ description: 可观测性与模型降质检测。Use when 一次开发会话结�
 
 - **只记成功不记错误** → 复盘失去价值。错误与解法必须记。
 - **发现降质不干预** → 任由标准烂下去。命中告警阈值就按处理方式动作。
+- **事实/推断/外部待办混写** → 一次观察被当成产品事实、外部 pending 被当成完成。四类分开写。
+- **模板不在就跳过记录** → 会话记录静默丢失。缺模板走 `template_missing_fallback` 最小结构补记。
 
 ## 参考
 
 - 模板：`templates/session-summary-template.md`、`templates/pr-summary-template.md`
 - 下一步：`skills/improve-retro/SKILL.md`（把记录提炼成规则/新 skill）
-- 方法论出处：唯一真源 `docs/AI 编程方法论 v1.2 — 可操作版.md` 第四章（Observe）

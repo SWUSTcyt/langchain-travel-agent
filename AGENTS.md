@@ -28,10 +28,15 @@ Plan（规划）→ Execute（执行）→ Verify（验证）→ Observe（观�
 | Execute | `execute-implement` | 一个 Issue 进入开发 |
 | Verify | `verify-test` | 写三层测试 / 编码前出测试计划 |
 | Verify | `verify-review` | PR 提交后或提交前自查 |
+| Verify | `verify-release` | 阶段结束要 commit/push/PR/merge，需发布安全门禁与协作感知 |
 | Observe | `observe-session` | 会话结束写摘要 / 检测模型降质 |
 | Improve | `improve-retro` | 反复踩坑 / Milestone 结束，提炼规则与新 Skill |
 | **项目级** | `understand` | 首次进入项目或架构大改后，生成/更新 `docs/ARCHITECTURE.md` |
 | **项目级** | `feature` | 基于架构文档实现新功能或修复 bug |
+
+## LangChain 官方 Skill
+
+本项目依赖 `langchain>=1.0`。官方 skill 来自 [langchain-ai/langchain-skills](https://github.com/langchain-ai/langchain-skills)，装在 `.agents/skills/`（Cursor）和 `.claude/skills/`（Claude Code）。写 Agent、工具、中间件、RAG 或 LangGraph 前，先读 `ecosystem-primer`，再按它指向的 skill 加载。
 
 ## 关键约定
 
