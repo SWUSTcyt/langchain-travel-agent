@@ -32,3 +32,9 @@ class Config:
 # 环境变量（对外暴露，方便其它模块直接使用）
 DASHSCOPE_API_KEY: str | None = os.getenv("DASHSCOPE_API_KEY")
 AMAP_MCP_URL: str | None = os.getenv("AMAP_MCP_URL")
+
+# qwen-turbo 已于 2026-10-10 下线。新模型走兼容接口，不用旧的 Generation 接口。
+MODEL_NAME: str = "qwen3.8-flash"
+DASHSCOPE_BASE_URL: str = os.getenv("DASHSCOPE_BASE_URL") or (
+    "https://dashscope.aliyuncs.com/compatible-mode/v1"
+)

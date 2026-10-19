@@ -8,7 +8,8 @@ import gradio as gr
 from langchain_core.messages import AIMessage, HumanMessage
 
 from agent import agent
-from middleware import msg_text  # 复用工具函数
+from middleware import msg_text, trip_state_from_texts
+from turn_context import build_model_messages, session_user_texts
 
 
 # ===== 工具小函数 =====
@@ -178,10 +179,15 @@ def stream_answer(
     reasoning_text = ""  # 累积思考过程
     tool_rounds_tracker = 0
     last_batch_prefix_seen = None
+    # 行程状态只由本会话的用户原话算出，随请求传给中间件，不同浏览器会话互不影响。
+    # 模型上下文仍只带上一轮原话和最终答案。
+    trip = trip_state_from_texts(session_user_texts(chat_history, user_text))
+    turn_messages = build_model_messages(chat_history, user_text)
 
     for event in agent.stream(
-        {"messages": [HumanMessage(content=user_text)]},
+        {"messages": turn_messages},
         config={"recursion_limit": 40},
+        context=trip,
     ):
         if isinstance(event, dict):
             current_batch_prefix = None
@@ -254,8 +260,9 @@ def stream_answer(
     # 兜底：没流出文本就 invoke 一次
     if not final_text:
         result = agent.invoke(
-            {"messages": [HumanMessage(content=user_text)]},
+            {"messages": turn_messages},
             config={"recursion_limit": 40},
+            context=trip,
         )
         for msg in reversed(result.get("messages", [])):
             if isinstance(msg, AIMessage):

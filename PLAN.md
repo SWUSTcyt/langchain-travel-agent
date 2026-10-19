@@ -1,34 +1,30 @@
-# 项目: 旅游助手 | 状态: M1 已完成 + P0 已修 + E2E 通过
+# 项目: 旅游助手 | 状态: ISSUE-002 已修复，复审可合入
 
-> 项目状态唯一真源（≤500 tokens）。方法论见 vibe-coding-playbook。
+> 当前运行状态唯一真源。评审全文不在这里。
 
-## 当前 Milestone: M1 - Gradio 现代化主题 MVP [100%]
+## 当前
 
-## Issue 状态
+- 模型 `qwen3.8-flash`（兼容接口）。架构文档已同步。
+- 行程状态（城市/天数/节奏）每轮从本会话用户原话算出，以 `context=` 传给中间件，不用进程级变量。
+- 模型上下文：系统说明 + 行程状态 + 上一轮原话和最终答案 + 当前句。
+- 离线 23 项通过；示例通过；真实三轮（成都两天 → 改成三天 → 丽江天气）城市正确。
+- 评审：`docs/reviews/2026-10-19-baseline-review.md`、`docs/reviews/2026-10-20-pre-merge-review.md`
 
-- [x] #1 抽离样式层：主题(gr.themes.Soft) + 外置 custom.css → done
-- [x] #2 布局重构：顶部品牌区 + 主对话区 + 侧栏（日志/开发者） → done
-- [x] #3 对话区美化：气泡布局、输入框+发送按钮、示例问题 → done
-- [x] #4 reasoning 与日志面板适配新布局（保留 details 折叠与 dev 模式） → done
-- [x] #5 响应式：移动端断点（双栏→单栏，@max-width 860px） → done
-- [x] P0: enforce_city_on_tools city 注入修复 → done（req.override(tool_call=...)）
-- [x] P0: 模型名 qwen-turbo-latest 403 → done（改为 qwen-turbo）
+## 已完成
 
-## 关键决策（不可回调）
+- ISSUE-001（事后补记）：注入失败即停、上下文改为状态加上一轮。
+- ISSUE-002：上一轮城市不再覆盖本句城市；会话隔离；「第一天」不当天数；工具本身报错不再被说成注入失败。
 
-- 方案 A：Gradio 主题 + CSS + 布局重构，后端零改动
-- stream_answer 返回 4 值（+reasoning_text），前端已适配
-- Gradio 6：theme/css 在 launch() 传入；Chatbot 用 buttons=["copy"]
+## 未开工
 
-## 验收分级
+- 页面开两个标签页手点验证隔离。
+- 工具异常仍可能变成一段普通文字交给模型。
+- 缺一份写成文档的 Agent 方案。
 
-P0：功能不回退；P1：核心视觉/布局；P2：边界；P3：锦上添花。
+## 不要做
 
-## 自查结论
+- 不要改成 Deep Agents、手写 LangGraph、向量库，或给只读工具加人审
 
-- P0 ✅ E2E 全链路通过（enforce_city_on_tools 注入 city=成都 + MCP 3 工具正常返回）
-- P1 ✅ Soft 主题 + custom.css + 双栏布局
-- P2 ✅ 空态 placeholder、输入 max_lines=4、清空可复位
-- P3 ✅ 气泡布局、标签、示例问题
-- Skills ✅ 两层安装完成（playbook 7 个 + 项目 2 个 → .cursor/ 和 .claude/）
-- 文档 ✅ ARCHITECTURE.md 已与代码对齐（模型名/工具名/中间件逻辑/stream 返回值）
+## 下一步
+
+走发布门禁：feature 分支、逐路径暂存、扫描、PR、合并。

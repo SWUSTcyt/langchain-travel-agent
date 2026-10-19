@@ -42,7 +42,7 @@ pip install -r requirements.txt
 - `DASHSCOPE_API_KEY`：
   - 用于访问 **通义千问 Qwen 模型**（通过 DashScope 平台）
   - 获取方式：登录阿里云通义千问 / DashScope 控制台，创建 API Key，将值填入 `.env` 中的 `DASHSCOPE_API_KEY`
-  - 推荐模型：`qwen-turbo-latest`（默认）、或按需改为 `qwen-plus`
+  - 当前模型：`qwen3.8-flash`（兼容接口）。`qwen-turbo` 已下线，不要再改回 `qwen-turbo-latest`
 
 - `AMAP_MCP_URL`：
   - 用于连接 **高德地图 MCP Server（amap-maps）** 的 SSE 服务地址

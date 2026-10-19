@@ -29,12 +29,41 @@ from langchain_core.messages import (
 
 from config import Config
 from tools import get_tool_names_sorted, get_global_tools
+from turn_context import TripState, parse_days, parse_pace
 
 logger = logging.getLogger(__name__)
 
-# 模块级缓存：存储当前轮次的目标城市（供 wrap_tool_call 中间件使用）
-_target_cities_cache: set = set()
-_original_input_cache: str = ""
+
+def trip_state_from_texts(user_texts: list[str]) -> TripState:
+    """按时间顺序扫描本会话用户原话：每个字段取最近一次被提到的值，最后一句是当前句。"""
+    cities: tuple[str, ...] = ()
+    days = None
+    pace = None
+    from_current = False
+    last = len(user_texts) - 1
+    for index, text in enumerate(user_texts):
+        found = extract_cities(text or "")
+        if found:
+            cities = tuple(found)
+        if index == last:
+            from_current = bool(found)
+        days = parse_days(text) or days
+        pace = parse_pace(text) or pace
+    return TripState(
+        cities=cities, cities_from_current=from_current, days=days, pace=pace
+    )
+
+
+def _resolve_trip(state, runtime) -> TripState:
+    """优先用调用方传入的会话上下文；没有时只从本次 state 的用户消息推算。"""
+    context = getattr(runtime, "context", None)
+    if isinstance(context, TripState):
+        return context
+    messages = state.get("messages", []) if isinstance(state, dict) else []
+    texts = [
+        msg_text(m) for m in messages if msg_is_human(m) or isinstance(m, HumanMessage)
+    ]
+    return trip_state_from_texts(texts)
 
 
 # === 工具函数 ===
@@ -149,27 +178,37 @@ def pin_cities_and_adcodes(state: AgentState, runtime) -> dict | None:
         except Exception:
             pass
 
-    # 提取城市
-    cities = extract_cities(query) if query else []
-
-    # 写入模块级缓存
-    global _target_cities_cache, _original_input_cache
-    _target_cities_cache = set(cities)
-    _original_input_cache = query
+    # 本句有城市才覆盖；没有就沿用本会话更早的城市。天数和节奏同样只在被提及时更新。
+    trip = _resolve_trip(state, runtime)
+    cities = list(trip.cities)
 
     logger.info(
         "[PinCities] 提取城市: %s",
-        cities if cities else "(未提取到)",
+        cities if trip.cities_from_current else f"(本句未提取，沿用 {cities or '无'})",
     )
 
-    if cities:
+    carried = trip.constraints_line()
+    carried_tip = f"{carried}。" if carried else ""
+    if cities and trip.cities_from_current:
         city_tips = (
-            f"\n【强制约束】本轮用户指定城市：{', '.join(cities)}。"
+            f"\n【强制约束】本句指定城市：{', '.join(cities)}。"
+            f"{carried_tip}"
             f"仅在这些城市范围内规划；所有 MCP 工具调用必须携带匹配的 city/cityd。"
             f"禁止使用其他城市的 adcode 或坐标；若出现其他城市名，将被视为错误并强制重写。"
         )
+    elif cities:
+        # 内置城市表不全，本句可能点了表外城市，所以沿用的城市不能压过本句。
+        city_tips = (
+            f"\n【城市】沿用上一轮城市：{', '.join(cities)}。"
+            f"{carried_tip}"
+            f"本句若明确提到其他城市，以本句为准，工具 city 填本句城市；"
+            f"否则所有 MCP 工具调用携带 city={cities[0]}。"
+        )
     else:
-        city_tips = "\n【强制约束】请从用户问题中判断目标城市；禁止跨城或引入未出现的城市。"
+        city_tips = (
+            "\n【强制约束】请从用户问题中判断目标城市；禁止跨城或引入未出现的城市。"
+            + carried_tip
+        )
 
     messages_info = (
         f"messages数量：{len(state.get('messages', []))}"
@@ -357,72 +396,102 @@ def track_tool_budget(req, handler):
     return handler(req)
 
 
+def _tool_name_of(tc) -> str:
+    if isinstance(tc, dict):
+        return (tc.get("name") or tc.get("function", {}).get("name") or "").lower()
+    if hasattr(tc, "name"):
+        return (tc.name or "").lower()
+    return ""
+
+
+def _city_pinned_request(req, tc, tool_name: str):
+    """返回要交给工具的请求：地图工具写好城市，其余原样。写入失败直接抛错。"""
+    # 仅对地图相关工具生效
+    if not any(
+        k in tool_name for k in ("map", "amap", "poi", "route", "weather", "direction", "distance")
+    ):
+        return req
+
+    # 获取目标城市（本会话上下文，不读进程级变量）
+    trip = _resolve_trip(getattr(req, "state", None), getattr(req, "runtime", None))
+
+    if not trip.cities:
+        logger.debug("[EnforceCity] target_cities 为空，跳过注入（工具: %s）", tool_name)
+        return req
+
+    pinned_city = trip.cities[0]
+
+    # 从 tool_call 中提取参数
+    params = {}
+    if isinstance(tc, dict):
+        params = dict(tc.get("args") or {})
+    elif hasattr(tc, "args") and isinstance(tc.args, dict):
+        params = dict(tc.args)
+
+    # 沿用的城市只补缺，不覆盖模型按本句填的城市（本句可能是内置表外的城市）
+    if not trip.cities_from_current and str(params.get("city") or "").strip():
+        logger.info(
+            "[EnforceCity] 工具 %s 保留模型给出的 city=%s（沿用城市 %s 不覆盖）",
+            tool_name,
+            params.get("city"),
+            pinned_city,
+        )
+        return req
+
+    # 注入城市参数
+    params["city"] = pinned_city
+    params["cityd"] = pinned_city
+    if "adcode" in params:
+        params["adcode"] = ""
+
+    # 用正确的 API 修改 tool_call（只支持 tool_call 参数）
+    if isinstance(tc, dict):
+        modified_call = {**tc, "args": params}
+    else:
+        # tc 是对象（如 ToolCall dataclass），需要构造新的 dict
+        modified_call = {
+            "name": getattr(tc, "name", ""),
+            "args": params,
+            "id": getattr(tc, "id", ""),
+            "type": getattr(tc, "type", "tool_call"),
+        }
+
+    pinned = req.override(tool_call=modified_call)
+    logger.info(
+        "[EnforceCity] 工具 %s 已注入 city=%s",
+        tool_name,
+        pinned_city,
+    )
+    return pinned
+
+
 @wrap_tool_call
 def enforce_city_on_tools(req, handler):
     """工具调用时强制 city/adcode 匹配目标城市集（仅改参数，不改工具名）"""
+    tool_name = ""
+    tc = None
     try:
-        tool_name = ""
         tc = req.tool_call if hasattr(req, "tool_call") else None
         if tc is None:
-            return handler(req)
-
-        # 获取工具名
-        if isinstance(tc, dict):
-            tool_name = (tc.get("name") or tc.get("function", {}).get("name") or "").lower()
-        elif hasattr(tc, "name"):
-            tool_name = (tc.name or "").lower()
-
-        # 仅对地图相关工具生效
-        if not any(
-            k in tool_name for k in ("map", "amap", "poi", "route", "weather", "direction", "distance")
-        ):
-            return handler(req)
-
-        # 获取目标城市（从模块级缓存读取）
-        cities = _target_cities_cache
-
-        if not cities:
-            logger.debug("[EnforceCity] target_cities 为空，跳过注入（工具: %s）", tool_name)
-            return handler(req)
-
-        pinned_city = next(iter(cities))
-
-        # 从 tool_call 中提取参数
-        params = {}
-        if isinstance(tc, dict):
-            params = dict(tc.get("args") or {})
-        elif hasattr(tc, "args") and isinstance(tc.args, dict):
-            params = dict(tc.args)
-
-        # 注入城市参数
-        params["city"] = pinned_city
-        params["cityd"] = pinned_city
-        if "adcode" in params:
-            params["adcode"] = ""
-
-        # 用正确的 API 修改 tool_call（只支持 tool_call 参数）
-        if isinstance(tc, dict):
-            modified_call = {**tc, "args": params}
+            target = req
         else:
-            # tc 是对象（如 ToolCall dataclass），需要构造新的 dict
-            modified_call = {
-                "name": getattr(tc, "name", ""),
-                "args": params,
-                "id": getattr(tc, "id", ""),
-                "type": getattr(tc, "type", "tool_call"),
-            }
-
-        req = req.override(tool_call=modified_call)
-        logger.info(
-            "[EnforceCity] 工具 %s 已注入 city=%s",
-            tool_name,
-            pinned_city,
+            tool_name = _tool_name_of(tc)
+            target = _city_pinned_request(req, tc, tool_name)
+    except Exception as e:
+        logger.warning("[EnforceCity] 城市注入失败，已停止该工具：%s", e)
+        call_id = "city_guard"
+        if isinstance(tc, dict):
+            call_id = tc.get("id") or call_id
+        elif tc is not None:
+            call_id = getattr(tc, "id", None) or call_id
+        return ToolMessage(
+            content='{"error":"城市注入失败","message":"未能写入城市参数，已停止调用该地图工具。"}',
+            tool_call_id=call_id,
+            name=tool_name or "city_guard",
         )
 
-    except Exception as e:
-        logger.warning("[EnforceCity] 城市注入异常（继续执行）：%s", e)
-
-    return handler(req)
+    # 工具本身抛的错不属于城市注入失败，原样上抛
+    return handler(target)
 
 
 # === wrap_model_call 中间件 ===
@@ -465,11 +534,12 @@ def cost_guard(
     except Exception:
         pass
 
+    # 兼容接口认 max_tokens / extra_body。旧的 max_output_tokens、incremental_output
+    # 传给 ChatOpenAI 会被当成非法参数。
     guarded = req.override(
         model_settings={
-            "max_output_tokens": Config.MAX_OUTPUT_TOKENS,
-            "incremental_output": Config.INCREMENTAL_OUTPUT,
-            "enable_thinking": Config.ENABLE_THINKING,
+            "max_tokens": Config.MAX_OUTPUT_TOKENS,
+            "extra_body": {"enable_thinking": Config.ENABLE_THINKING},
         }
     )
     return handler(guarded)
