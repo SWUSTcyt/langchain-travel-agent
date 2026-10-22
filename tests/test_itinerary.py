@@ -336,6 +336,71 @@ class DetailCoordTest(unittest.TestCase):
         search_at = log.index(("search", "点2-0"))
         self.assertLess(search_at, log.index(("detail", "id-点2-0")))
 
+    def _three_day_answer_and_search(self):
+        answer = _answer(
+            [
+                {"stops": [{"slot": "上午", "name": "故宫博物院", "what": "逛", "how": "地铁", "tip": ""}]},
+                {"stops": [{"slot": "上午", "name": "天坛公园", "what": "逛", "how": "地铁", "tip": ""}]},
+                {"stops": [{"slot": "上午", "name": "景山公园", "what": "逛", "how": "步行", "tip": ""}]},
+            ]
+        )
+        search = '{"pois":[{"id":"B1","name":"故宫博物院"},{"id":"B2","name":"天坛公园"}]}'
+        return answer, search
+
+    def test_gaode_down_stops_host_lookups_after_first_failure(self):
+        answer, search = self._three_day_answer_and_search()
+
+        def boom(_value):
+            raise TimeoutError("timed out")
+
+        failures = {
+            "失败文字": lambda _value: "工具执行失败：timed out。本次没有查到数据。",
+            "抛异常": boom,
+            "空结果": lambda _value: "",
+        }
+        for label, fail in failures.items():
+            with self.subTest(label):
+                log = []
+
+                def fetch(value, fail=fail):
+                    log.append(value)
+                    return fail(value)
+
+                _display, parsed, _map_itinerary = itinerary.finalize_turn(
+                    answer,
+                    [{"name": "maps_text_search", "content": search}],
+                    city="北京",
+                    fetch_detail=fetch,
+                    fetch_search=fetch,
+                )
+                self.assertEqual(len(log), 1)
+                self.assertIsNone(parsed.days[0].stops[0].lng)
+
+    def test_coords_found_before_failure_are_kept(self):
+        answer, search = self._three_day_answer_and_search()
+        log = []
+
+        def fetch_detail(poi_id):
+            log.append(("detail", poi_id))
+            if poi_id == "B1":
+                return '{"id":"B1","name":"故宫博物院","location":"116.397,39.918","city":"北京市"}'
+            return "工具执行失败：timed out。本次没有查到数据。"
+
+        def fetch_search(name):
+            log.append(("search", name))
+            return '{"pois":[{"id":"J1","name":"景山公园"}]}'
+
+        _display, parsed, _map_itinerary = itinerary.finalize_turn(
+            answer,
+            [{"name": "maps_text_search", "content": search}],
+            city="北京",
+            fetch_detail=fetch_detail,
+            fetch_search=fetch_search,
+        )
+        self.assertEqual(log, [("detail", "B1"), ("detail", "B2")])
+        self.assertAlmostEqual(parsed.days[0].stops[0].lng, 116.397)
+        self.assertIsNone(parsed.days[1].stops[0].lng)
+
     def test_ambiguous_short_name_does_not_steal_a_coord(self):
         search = (
             '{"pois":[{"id":"B1","name":"杭州西湖风景名胜区"},'

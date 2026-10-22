@@ -431,3 +431,14 @@
 - **建议(suggestion)**: 刷新后再问一次北京三日游，然后点第 3 天。
 - **限制(limit)**: 离线通过不能代替真实高德返回。
 - **下一步(next_owner / due_at)**: 下一次真实提问后看第 3 天是否有坐标。
+
+### 2026-10-23: PR #3 审查问题修复（ISSUE-015）
+
+- **出现位置**: `itinerary.py` 的 `_HostBudget`、`_fill_stop_coords`、`_fetch_details`；`readme.md`；PR #3 的换行符
+- **事实(fact)**: 审查发现高德不通时页面补查不停，12 次 × 10 秒最多卡 120 秒。现在第一次失败（异常、空、「工具执行失败」文字）就停，模拟高德不通只调用 1 次。失败前查到的坐标保留。单测 77 项 OK；`itinerary.py` 覆盖率 83%，`itinerary_view.py` 87%。README 补了 JS key，去掉「并行调用、路线规划」。PR 里 14 个文件被存成 CRLF，原因是用 WSL 的 git（`bash -lc`）暂存，没走 Windows 的 `autocrlf`。
+- **推断(inference)**: 无。
+- **决定(decision)**: 本仓库的 git 暂存与提交一律用 Windows git，不用 `bash -lc`。
+- **外部待办(external_blocker)**: 界面截图由用户截取，放到 `docs/images/ui-preview.png`。
+- **建议(suggestion)**: 无。
+- **限制(limit)**: 「失败就停」也会让一次额度超限后的补查全部跳过，这一次的地图点会少。
+- **下一步(next_owner / due_at)**: 用户放入截图后提交；ISSUE-008、012 真实日志仍待补。

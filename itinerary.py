@@ -97,6 +97,17 @@ def extract_place_refs(tool_messages) -> list[PlaceRef]:
     return found
 
 
+# 与 tools._safe_run_coro 返回的失败文字开头保持一致
+_FAILED_PREFIX = "工具执行失败"
+
+
+def _lookup_failed(content) -> bool:
+    """补查没拿到结果：空，或工具包装层返回的失败文字。"""
+    if not content:
+        return True
+    return isinstance(content, str) and content.lstrip().startswith(_FAILED_PREFIX)
+
+
 class _HostBudget:
     """页面自己补搜和查详情共用的次数。一条一条扣，不并发。"""
 
@@ -109,6 +120,10 @@ class _HostBudget:
             return False
         self.left -= 1
         return True
+
+    def stop(self) -> None:
+        """高德一次失败多半是连不上或额度满了，剩下的补查每次都要等到超时，直接不查。"""
+        self.left = 0
 
 
 def collect_pois(
@@ -163,7 +178,10 @@ def _fill_stop_coords(pois, parsed, refs, fetch_detail, fetch_search, budget: _H
             try:
                 content = fetch_search(value)
             except Exception:
-                continue
+                content = None
+            if _lookup_failed(content):
+                budget.stop()
+                break
             found = extract_place_refs([{"name": _SEARCH_TOOL, "content": content}])
             matched = _ref_for_stop(value, found)
             if matched is not None and matched.poi_id not in budget.seen_ids:
@@ -182,7 +200,10 @@ def _fetch_details(pois: list[Poi], poi_ids: list[str], fetch_detail, budget: _H
         try:
             content = fetch_detail(poi_id)
         except Exception:
-            continue
+            content = None
+        if _lookup_failed(content):
+            budget.stop()
+            break
         found.extend(extract_pois([{"name": _DETAIL_TOOL, "content": content}]))
     return found
 
