@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>旅游助手界面原型 v0.3</title>
+  <style>
+    :root { --ink: #142033; --muted: #5c6b7a; --line: #d9e1ea; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; color: var(--ink); background: #f7f8fa; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    button, input { font: inherit; color: inherit; }
+    .review { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 16px; font-size: 13px; color: var(--muted); background: white; border-bottom: 1px solid var(--line); }
+    .states { display: flex; gap: 6px; }
+    .states button { border: 0; background: transparent; border-radius: 999px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+    .states button[aria-pressed="true"] { background: var(--ink); color: white; }
+    .stage { min-height: calc(100vh - 42px); display: grid; grid-template-columns: minmax(300px, 42vw) 1fr; }
+    .poster { position: relative; overflow: hidden; padding: 28px 28px 24px; display: flex; flex-direction: column; min-height: 100%; }
+    .poster::before { content: ""; position: absolute; width: 220px; height: 220px; border-radius: 50%; right: -48px; top: -56px; background: rgba(255, 244, 214, 0.95); }
+    .poster.dawn { background: linear-gradient(165deg, #123a5c, #3d8eb5 58%, #f6d7a4); color: white; }
+    .poster.dawn::before { background: rgba(255, 236, 196, 0.35); }
+    .poster.chengdu { background: linear-gradient(165deg, #ff8a3d, #ffc36b 55%, #fff1d2); }
+    .poster.fail { background: linear-gradient(165deg, #243044, #5c6d82 50%, #d7dde6); color: white; }
+    .poster.fail::before { background: transparent; border: 2px solid rgba(255,255,255,0.7); }
+    .brand, .meta, .source, form { position: relative; }
+    .brand { margin: 0; letter-spacing: 0.18em; font-size: 12px; opacity: 0.75; display: flex; align-items: center; gap: 12px; }
+    h1 { position: relative; margin: 18px 0 0; font-size: clamp(64px, 8vw, 104px); line-height: 0.9; letter-spacing: -0.05em; }
+    .meta { margin: 14px 0 0; font-size: 18px; }
+    .source { margin: 8px 0 0; max-width: 16em; font-size: 14px; opacity: 0.8; }
+    form { margin-top: auto; display: flex; gap: 10px; align-items: center; padding-top: 28px; }
+    input { flex: 1; border: 0; border-bottom: 1.5px solid currentColor; background: transparent; padding: 10px 0; outline: none; }
+    input::placeholder { color: currentColor; opacity: 0.55; }
+    .go, .quiet, .dev { border: 0; background: transparent; cursor: pointer; white-space: nowrap; color: inherit; }
+    .go { font-weight: 750; }
+    .dev { font-size: 12px; letter-spacing: 0; opacity: 0.75; }
+    .route { padding: 36px 40px 48px; }
+    .picks button { display: flex; justify-content: space-between; align-items: baseline; width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; padding: 18px 0; cursor: pointer; font-size: 40px; letter-spacing: -0.04em; font-weight: 700; }
+    .picks button small { font-size: 14px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+    .days { list-style: none; margin: 0; padding: 0; }
+    .days li { display: grid; grid-template-columns: 64px 1fr; gap: 8px; padding: 22px 0; border-top: 1px solid var(--line); }
+    .num { font-size: 13px; letter-spacing: 0.14em; color: #e06a2c; padding-top: 8px; }
+    .days h2 { margin: 0; font-size: 28px; }
+    .days p, .lead { margin: 6px 0 0; color: #3e4c5c; }
+    .lead { margin: 0 0 8px; color: var(--muted); }
+    .miss { margin: 24px 0 0; font-size: 36px; line-height: 1.25; letter-spacing: -0.04em; }
+    .ghost { height: 18px; margin: 18px 0; border-radius: 999px; background: linear-gradient(90deg, #e6edf3, #fff, #e6edf3); background-size: 200% 100%; animation: shine 1.1s linear infinite; }
+    .ghost.short { width: 46%; }
+    @keyframes shine { to { background-position: -200% 0; } }
+    .drawer { position: fixed; inset: 0 0 0 auto; width: min(320px, 100%); background: white; border-left: 1px solid var(--line); padding: 20px; transform: translateX(100%); transition: transform 0.2s ease; }
+    .drawer.open { transform: translateX(0); }
+    .drawer pre { white-space: pre-wrap; background: #f4f7fa; padding: 12px; font-size: 12px; }
+    @media (max-width: 860px) { .stage { grid-template-columns: 1fr; } .poster { min-height: 320px; } .route { padding: 24px 20px 36px; } .picks button { font-size: 32px; } }
+  </style>
+</head>
+<body>
+  <div class="review">
+    <div><b>历史快照 v0.3</b>（截至 2026-10-20，当前见 v0.4）· 演示数据，不连接模型和地图。</div>
+    <div class="states">
+      <button type="button" data-state="empty" aria-pressed="true">空</button>
+      <button type="button" data-state="loading">加载</button>
+      <button type="button" data-state="ok">正常</button>
+      <button type="button" data-state="fail">失败</button>
+    </div>
+  </div>
+  <main class="stage">
+    <section class="poster dawn" id="poster">
+      <p class="brand">旅游助手 <button class="dev" id="dev" type="button">开发者</button></p>
+      <h1 id="city">下一站</h1>
+      <p class="meta" id="meta"></p>
+      <p class="source" id="source">点一个城市，或直接写在下面。</p>
+      <form id="form">
+        <input id="input" aria-label="出行需求" placeholder="成都，两天，轻松一点" />
+        <button class="quiet" id="clear" type="button">清空</button>
+        <button class="go" type="submit">出发</button>
+      </form>
+    </section>
+    <section class="route" id="sheet"></section>
+  </main>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <h2>开发者</h2>
+    <pre id="log">（本次尚无日志）</pre>
+    <button class="quiet" id="close-dev" type="button">关闭</button>
+  </aside>
+  <script>
+    const poster = document.getElementById("poster");
+    const city = document.getElementById("city");
+    const meta = document.getElementById("meta");
+    const source = document.getElementById("source");
+    const sheet = document.getElementById("sheet");
+    const input = document.getElementById("input");
+    const log = document.getElementById("log");
+    const drawer = document.getElementById("drawer");
+    const views = {
+      empty: { tone: "dawn", city: "下一站", meta: "", source: "点一个城市，或直接写在下面。", placeholder: "成都，两天，轻松一点", log: "（本次尚无日志）", html: `<div class="picks"><button type="button" data-fill="成都两天，轻松不赶">成都<small>两天 · 不赶</small></button><button type="button" data-fill="杭州周末，西湖附近走走">杭州<small>周末 · 湖边</small></button><button type="button" data-fill="北京三天，别太赶">北京<small>三天 · 城里</small></button></div>` },
+      loading: { tone: "chengdu", city: "成都", meta: "两天 · 轻松不赶", source: "本句指定", placeholder: "成都，两天，轻松一点", log: "正在查询高德…", html: `<p class="lead">你说：成都两天，轻松不赶</p><div class="ghost"></div><div class="ghost short"></div>` },
+      ok: { tone: "chengdu", city: "成都", meta: "三天 · 轻松不赶 · 多云 18–26℃", source: "沿用上一轮，天数已改成三天", placeholder: "接着改，比如换成丽江", log: "maps_weather city=成都", html: `<p class="lead">你说：改成三天</p><ol class="days"><li><span class="num">01</span><div><h2>熊猫和老城</h2><p>上午看熊猫基地，下午在宽窄巷子慢慢走。</p></div></li><li><span class="num">02</span><div><h2>市区慢慢逛</h2><p>人民公园喝茶，顺路吃一家火锅。</p></div></li><li><span class="num">03</span><div><h2>近郊半天</h2><p>上午出城，下午留在市区。</p></div></li></ol>` },
+      fail: { tone: "fail", city: "成都", meta: "三天 · 轻松不赶", source: "丽江这一句没有查到", placeholder: "成都，两天，轻松一点", log: "maps_weather 失败", html: `<p class="miss">这次没查到。高德没有返回丽江的天气，成都的行程还留着。</p>` }
+    };
+    function render(name) {
+      const view = views[name];
+      poster.className = "poster " + view.tone;
+      city.textContent = view.city; meta.textContent = view.meta; source.textContent = view.source;
+      input.placeholder = view.placeholder; log.textContent = view.log; sheet.innerHTML = view.html;
+      document.querySelectorAll(".states button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.state === name)));
+      sheet.querySelectorAll("[data-fill]").forEach((button) => button.addEventListener("click", () => { input.value = button.dataset.fill; input.focus(); }));
+    }
+    document.querySelectorAll(".states button").forEach((button) => button.addEventListener("click", () => render(button.dataset.state)));
+    const setDrawer = (open) => { drawer.classList.toggle("open", open); drawer.setAttribute("aria-hidden", String(!open)); };
+    document.getElementById("dev").addEventListener("click", () => setDrawer(true));
+    document.getElementById("close-dev").addEventListener("click", () => setDrawer(false));
+    document.getElementById("clear").addEventListener("click", () => { input.value = ""; render("empty"); });
+    document.getElementById("form").addEventListener("submit", (event) => event.preventDefault());
+    render("empty");
+  </script>
+</body>
+</html>

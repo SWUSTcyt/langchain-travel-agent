@@ -2,7 +2,7 @@
 
 import logging
 
-from ui import create_gradio_app, APP_THEME, load_app_css
+from ui import create_gradio_app, APP_THEME, load_app_css, page_head
 
 
 if __name__ == "__main__":
@@ -20,4 +20,5 @@ if __name__ == "__main__":
         share=False,
         theme=APP_THEME,
         css=load_app_css(),
+        head=page_head(),
     )

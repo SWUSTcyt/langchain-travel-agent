@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>旅游助手界面原型 v0.9</title>
+  <style>
+    :root { --ink: #1c2430; --muted: #667384; --line: #e6ebf0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: #f6f8fa; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    button, input { font: inherit; }
+    .review { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 14px; background: white; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    .states { display: flex; gap: 6px; flex-wrap: wrap; }
+    .states button { border: 0; background: transparent; border-radius: 999px; padding: 5px 10px; cursor: pointer; color: var(--muted); }
+    .states button[aria-pressed="true"] { background: var(--ink); color: white; }
+    .sheet { width: min(640px, calc(100% - 28px)); margin: 22px auto 48px; }
+    .now { background: white; border-radius: 18px; padding: 18px 18px 8px; }
+    .kicker { margin: 0; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; }
+    h1 { margin: 6px 0 0; font-size: 34px; letter-spacing: -0.04em; }
+    .when { margin: 6px 0 0; color: var(--muted); }
+    .miss { margin: 12px 0 0; color: #9f2d22; }
+    ol { list-style: none; margin: 18px 0 0; padding: 0; }
+    li { display: grid; grid-template-columns: 72px 1fr; gap: 8px; padding: 14px 0; border-top: 1px solid var(--line); }
+    li b { display: block; }
+    li span { color: var(--muted); font-size: 14px; }
+    .later { margin-top: 14px; background: white; border-radius: 18px; padding: 8px 18px 18px; }
+    .later h2 { margin: 14px 0 0; font-size: 15px; color: var(--muted); font-weight: 650; }
+    form { display: flex; gap: 8px; margin-top: 14px; }
+    input { flex: 1; border: 0; background: white; border-radius: 12px; padding: 12px 14px; }
+    button.send { border: 0; background: var(--ink); color: white; border-radius: 12px; padding: 0 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="review">
+    <div><b>界面原型 v0.9</b> · 没有地图。演示数据。</div>
+    <div class="states">
+      <button type="button" data-scene="empty">空</button>
+      <button type="button" data-scene="now" aria-pressed="true">出发中</button>
+      <button type="button" data-scene="seven">七天</button>
+      <button type="button" data-scene="fail">失败</button>
+    </div>
+  </div>
+  <main class="sheet" id="sheet"></main>
+  <script>
+    const sheet = document.getElementById("sheet");
+    const days = [
+      ["第 1 天", [["上午", "熊猫基地", "先看熊猫，人少一些"], ["下午", "宽窄巷子", "慢慢走，不赶"]]],
+      ["第 2 天", [["下午", "人民公园", "喝茶"], ["晚上", "火锅", "就在附近"]]],
+      ["第 3 天", [["上午", "近郊", "只留半天，下午回市区"]]]
+    ];
+    const week = ["熊猫基地", "宽窄巷子", "人民公园", "博物馆", "东郊", "河岸", "近郊"].map((name, index) => [`第 ${index + 1} 天`, [["白天", name, "这一天的第一站"]]]);
+    function block(plan, note) {
+      const first = plan[0][1][0];
+      const rest = plan.map(([title, stops]) => `<section class="later"><h2>${title}</h2><ol>${stops.map(([time, name, what]) => `<li><span>${time}</span><div><b>${name}</b><span>${what}</span></div></li>`).join("")}</ol></section>`).join("");
+      return `<article class="now"><p class="kicker">下一站</p><h1>${first[1]}</h1><p class="when">${plan[0][0]} · ${first[0]} · ${first[2]}</p>${note ? `<p class="miss">${note}</p>` : ""}</article>${rest}`;
+    }
+    const scenes = {
+      empty: `<article class="now"><p class="kicker">下一站</p><h1>还没有</h1><p class="when">说一个城市和天数，这里会变成一张按时间读的纸条。</p></article>`,
+      now: block(days, ""),
+      seven: block(week, ""),
+      fail: block(days, "这次没查到丽江的天气。纸条还是上一趟成都。")
+    };
+    function show(name) {
+      sheet.innerHTML = scenes[name] + `<form id="form"><input aria-label="出行需求" placeholder="改成七天，或者问今天天气"><button class="send" type="submit">发送</button></form>`;
+      document.querySelectorAll(".states button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.scene === name)));
+      document.getElementById("form").addEventListener("submit", (event) => event.preventDefault());
+    }
+    document.querySelectorAll(".states button").forEach((button) => button.addEventListener("click", () => show(button.dataset.scene)));
+    show("now");
+  </script>
+</body>
+</html>

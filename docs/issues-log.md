@@ -211,3 +211,234 @@
 - **建议(suggestion)**: 合入后在页面开两个标签页手点一次。
 - **限制(limit)**: 会话隔离只有离线测试，没有真实多标签页点测。
 - **下一步(next_owner / due_at)**: 复审通过，进入发布门禁。
+
+### 2026-10-20: 工作流更新到 playbook v0.6.0
+
+- **出现位置**: `.cursor/skills/`、`.claude/skills/` 的 5 个流程 skill；`templates/`；`reference/`；`docs/e2e-verify-guide.md`
+- **事实(fact)**: 用 `F:\working\vibe-coding-playbook\scripts\sync-skills.py --install` 安装，上游 `7df0205`（tag v0.6.0 之后 2 个提交）。安装前校验有内容漂移和缺失；安装后校验只剩「多余」，是项目自己的 `understand`、`feature` 和 LangChain 官方 skill。`AGENTS.md` 按脚本规则未覆盖。
+- **推断(inference)**: 无。
+- **决定(decision)**: 不删除多余 skill，不加 `--force-agents`。产品代码不动。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 下一项开发前先选定范围并写 Issue。
+- **限制(limit)**: 安装结果还在工作区，未提交。
+- **下一步(next_owner / due_at)**: 用户选定下一项优化。
+
+### 2026-10-20: 补 Agent 方案规格草稿
+
+- **出现位置**: `docs/spec/PROJECT.md`、`docs/spec/travel-agent.md`、`docs/spec/INDEX.md`
+- **事实(fact)**: 用户选定先补 Agent 方案。现有 `docs/spec/` 只有前端现代化一份，且写明不改 Agent。已写 SPEC-001 项目级和 SPEC-002 旅行对话 Agent，状态都是 Draft。SPEC-003 只补了编号和 parent。没有改产品代码。
+- **推断(inference)**: 无。
+- **决定(decision)**: 控制方式记为 ReAct 加中间件；记忆记为会话状态加上一轮窗口；不建知识库。AC-008（工具失败必须可见）标为待确认。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 用户确认草稿后再冻结，然后才拆实现任务。
+- **限制(limit)**: AC-001 到 AC-007 的测试早于这份规格，不能当成「先写验收再实现」的证据。
+- **下一步(next_owner / due_at)**: 用户确认 SPEC-002，并决定 AC-008 是否纳入。
+
+### 2026-10-20: SPEC-002 冻结，拆出 ISSUE-003
+
+- **出现位置**: `docs/spec/travel-agent.md`、`docs/issues/ISSUE-003-tool-failure-visible.md`
+- **事实(fact)**: 用户确认整份草稿，AC-008 纳入。SPEC-001 与 SPEC-002 改为 Frozen。ISSUE-003 只改工具失败文本，状态是待确认拆分。同一条消息里用户说现有界面丑，想重新做 UI，排在这次总结之后。
+- **推断(inference)**: 无。
+- **决定(decision)**: 不把界面改动写进 ISSUE-003。确认拆分前不改产品代码。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 界面若连布局一起改，先做可点击原型。
+- **限制(limit)**: 无。
+- **下一步(next_owner / due_at)**: 用户确认 ISSUE-003，并选定界面改动范围。
+
+### 2026-10-20: ISSUE-003 离线完成；界面进入 v0.11 待确认
+
+- **出现位置**: `tools.py` `_safe_run_coro`；`prototypes/travel-ui-v0.11.html`；`docs/spec/trip-map-ui.md`
+- **事实(fact)**: 用户确认 ISSUE-003 后，失败文本改为「工具执行失败…本次没有查到数据」，不含「直接回答」「基于已知信息」。`ToolFailureTextTest` 三条通过，离线共 26 项。真实高德失败下的最终措辞未验证。v0.11 已画出六种状态：空、没说天数、三天、七天、没查到、只问天气。宽屏文字约 58%、地图约 42%；只问天气不出地图。Stitch 材料在 `prototypes/stitch/`。SPEC-004、SPEC-005 仍是 Draft。ISSUE-004、ISSUE-005 待确认拆分。
+- **推断(inference)**: 无。
+- **决定(decision)**: 前端推荐先用 Gradio 内嵌高德 JS（方案 A）。用户确认 Spec、拆分和方案之前不改 `ui.py`。
+- **外部待办(external_blocker)**: Stitch 视觉稿要用户用 Google 账号生成；高德 Web 端 JS key 尚未配置。
+- **建议(suggestion)**: 先确认 v0.11 结构、SPEC-004/005、方案 A 和 M2 拆分。
+- **限制(limit)**: 不能把「文档已写」当成用户已确认冻结。
+- **下一步(next_owner / due_at)**: 用户确认上述四项，并准备高德 JS key。
+
+### 2026-10-20: 文字行程上了真实页面，地图还缺 JS key
+
+- **出现位置**: `itinerary.py`、`itinerary_view.py`、`ui.py`、`assets/trip-map.js`
+- **事实(fact)**: 用户确认 Spec、方案 A 和拆分后，SPEC-004/005 已冻结，SPEC-002 标为被取代。离线测试 46 项通过。真实入口输入「成都三天，轻松不赶」后，左边列出三天，每站有时段、怎么去、提醒。没有 `AMAP_JS_KEY`，右边显示「地图暂不可用」。宽屏文字约 713px、地图约 526px，无横向溢出。窄屏 390 文字在上、地图在下，地图块高度 260px。没有 key 时点天数原先没反应，已改成仍然切换文字里的当天。
+- **推断(inference)**: 无。
+- **决定(decision)**: 输出上限从 1200 提到 4096，否则文末的行程 JSON 会被截断。
+- **外部待办(external_blocker)**: 高德 Web 端 JS key 和安全密钥还没配，地图上的点和线没法验。
+- **建议(suggestion)**: 配好 key 后重开 `python main.py`，再走一遍成都三天，点第 2 天和地图上的地点。
+- **限制(limit)**: 这一次真实回答没有在页面上核对坐标是不是来自工具。
+- **下一步(next_owner / due_at)**: 用户准备 `AMAP_JS_KEY` 和 `AMAP_JS_SECURITY_CODE`。
+
+### 2026-10-20: 发送后输入框不再立刻变成占位符
+
+- **出现位置**: `ui.py` 的提交处理；`itinerary_view.render_pending_html`
+- **事实(fact)**: 用户反馈发送后输入框只剩浅灰占位符「成都三天，轻松一点」，以为没发出去。原因是提交后立刻把输入清空，答案回来前主区域仍是空状态。现改为跑的时候输入框保留原话，按钮变成「正在查」，主区域也写出这句话。结果出来后才清空输入框。`.env.example` 补了高德 JS key 的申请地址。
+- **推断(inference)**: 无。
+- **决定(decision)**: 原话在请求结束前一直可见。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 刷新 http://127.0.0.1:7862/ 后再发一句看。
+- **限制(limit)**: 只在请求进行中核对了这句话还在，没有等这次回答整段结束。
+- **下一步(next_owner / due_at)**: 用户刷新页面再试一次。
+
+### 2026-10-21: 地图补坐标、按天分色、提问页
+
+- **出现位置**: `middleware.py` 工具预算；`itinerary.py`；`itinerary_view.py`；`assets/trip-map.js`；`docs/issues/ISSUE-006-map-day-color-and-ask-page.md`
+- **事实(fact)**: 关键词搜索没有坐标，额度超限来自一轮里同时打出搜索、地理编码和多段路线。现改为模型只发 `maps_text_search` 和 `maps_weather`；路线、地理编码、详情由代码拦住。坐标用搜索 id 再查详情。提问页和输入框同宽 980px，三张行程卡横排。当天的点和线用同一颜色，其他天保持自己的颜色。只有一个点时不画线，并把地图中心移到这个点。离线测试含 `ToolBudgetTest`、`DetailCoordTest`、`MapPayloadTest`。页面用都江堰单点核对，中心 103.617, 31.008。
+- **推断(inference)**: 无。
+- **决定(decision)**: 10 月 20 日之后的地图修补没有先写 Issue，这次用 ISSUE-006 补上任务和通过标准。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 刷新后再看成都三天的第 3 天。
+- **限制(limit)**: 都江堰这一条是用喂入的坐标核对镜头，不是再跑一遍真实模型。
+- **下一步(next_owner / due_at)**: 无。
+
+### 2026-10-21: 补记工具调用范围
+
+- **出现位置**: `docs/issues/ISSUE-007-tool-call-scope.md`；`docs/session-summaries/2026-10-21-工具范围与地图修补.md`
+- **事实(fact)**: 用户问为什么没用工作流，并说明自己只知道「不会随便重复调用」。ISSUE-006 不是先确认再实现。本次只补记录，不改产品代码。拦截的是工具种类，不是搜索次数。
+- **推断(inference)**: 无。
+- **决定(decision)**: ISSUE-007 标为补记。P2「同一轮搜索最多 1 次」未做，确认前不写代码。
+- **外部待办(external_blocker)**: 拦截之后的真实一轮日志还没有。
+- **建议(suggestion)**: 用户看 ISSUE-007 是否接受这份补记。
+- **限制(limit)**: 不能把补记写成流程已经遵守。
+- **下一步(next_owner / due_at)**: 用户确认补记，并决定要不要做搜索次数硬限制。
+
+### 2026-10-21: 后续意见先走工作流
+
+- **出现位置**: `PLAN.md` 下一步
+- **事实(fact)**: 用户问没走工作流是不是因为自己没强调，或被 Cursor 的大提示拦住。项目技能在同一会话里可读；SPEC-004/005 和 ISSUE-003 曾按该流程做过。地图和工具这几轮没有先停下来等确认。
+- **推断(inference)**: 无。
+- **决定(decision)**: 原因不是「用户没强调」，也不是「大提示禁止写 Issue」。之后的意见先写任务和 P0 通过标准，用户确认后再改产品代码。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 无。
+- **限制(limit)**: 已写进工作区的代码不能改写成事先确认过。
+- **下一步(next_owner / due_at)**: 下一条产品意见先出任务，不直接改代码。
+
+### 2026-10-21: 拆出同一轮搜索最多一次
+
+- **出现位置**: `docs/issues/ISSUE-008-one-search-per-round.md`；`PLAN.md`
+- **事实(fact)**: 用户说「好的，继续」。按已记决定，只写任务和 P0，不改产品代码。ISSUE-007 的 P2 拆成 ISSUE-008：同一轮 `maps_text_search` 最多 1 次；`maps_weather` 默认同样最多 1 次，确认时可改。
+- **推断(inference)**: 无。
+- **决定(decision)**: 确认前不写代码。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 无。
+- **限制(limit)**: 无。
+- **下一步(next_owner / due_at)**: 用户确认 ISSUE-008，或指出天气不限制。
+
+### 2026-10-22: 同一轮搜索和天气各最多一次
+
+- **出现位置**: `middleware.py` 的 `track_tool_budget`；`tests/test_turn_context.py`；`docs/issues/ISSUE-008-one-search-per-round.md`
+- **事实(fact)**: 用户确认 ISSUE-008，未改天气范围，所以地点搜索和天气都是同一轮最多一次。先写失败测试，再在放行前计数。同一轮第二次不调用处理函数，搜索返回含「已经搜过」，天气返回含「已经查过」。新的一轮状态是空的，可以再查。`ToolBudgetTest` 5 项 OK。`test_turn_context`、`test_offline_baseline`、`test_itinerary`、`test_itinerary_view` 共 58 项 OK。坐标补全、地图颜色、提问页未改。
+- **推断(inference)**: 无。
+- **决定(decision)**: 次数在即将调用处理函数时才记上。被轮次预算拦住的那一次不算「已经搜过」。
+- **外部待办(external_blocker)**: 真实一轮日志里搜索是否只有 1 次，pending_external。离线通过不能代替这条。
+- **建议(suggestion)**: 无。
+- **限制(limit)**: 离线通过后已重启页面（127.0.0.1:7862 返回 200）。还没有一轮真实提问日志，不能把离线通过写成线上已验证。
+- **下一步(next_owner / due_at)**: 下一次真实提问后，看日志里的 `maps_text_search` 是否只有 1 次。
+
+### 2026-10-22: 结果页作为唯一页面，先写任务
+
+- **出现位置**: `docs/spec/trip-map-single-page.md`；`docs/issues/ISSUE-009-single-page-and-pin-label.md`
+- **事实(fact)**: 用户说结果页好看，只要左边对话、右边地图，不要两个页面的切换，提问就在这一页。地图先给默认的，有正确地点再刷新。杭州测试时坐标点上的文字太长，挡住地图。本次只写 Draft 和 Issue，不改产品代码。
+- **推断(inference)**: 无。
+- **决定(decision)**: 建议默认图是没有点的中国范围；新问题先回到默认图；没查到再恢复上一张；只问天气也不再藏起地图栏；点上只留序号，全名在气泡里。这些在 SPEC-006 里标成待确认。其中「只问天气仍留地图栏」会改掉 SPEC-004 的 AC-004。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 无。
+- **限制(limit)**: 确认前 SPEC-004 仍是冻结版，不能把建议写成已经生效。
+- **下一步(next_owner / due_at)**: 用户确认 ISSUE-009，或改默认图、天气时地图栏、点上文字这几条。
+
+### 2026-10-22: 结果页作为唯一页面已改
+
+- **出现位置**: `itinerary_view.py`；`ui.py`；`assets/trip-map.js`；`assets/custom.css`
+- **事实(fact)**: 用户确认 ISSUE-009。打开时右边不再藏起来。没有地点时是中国范围的空地图，图例「还没有地点。」。新问题在地点回来前回到这张空地图；这句没查到或只问天气时，把上一张有点的行程放回去。点上只留序号，全名在点击后的气泡里。`tests.test_itinerary_view` 14 项 OK。相关离线测试在修正断言前 63 项里只有「104.」误伤默认中心那一条失败，改断言后视图测试通过。浏览器 1366 宽：文字约 713px、地图约 526px，画布在，图例是「还没有地点。」。注入一条很长的杭州地名后，两个点的文本是「1」「2」，宽 28px；点击后气泡含「断桥残雪」。
+- **推断(inference)**: 无。
+- **决定(decision)**: 只问天气不再把地图栏藏起来。SPEC-006 冻结。SPEC-004 其余条款仍有效。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 刷新页面后再看。
+- **限制(limit)**: 长地名这一条是喂入的坐标，不是再跑一遍真实模型。
+- **下一步(next_owner / due_at)**: 无。
+
+### 2026-10-22: 左列改成对话，行程卡各自对应地图
+
+- **出现位置**: `docs/spec/trip-chat-cards.md`；`docs/issues/ISSUE-010-chat-cards.md`；`itinerary_view.py`；`ui.py`；`assets/trip-map.js`；`assets/custom.css`
+- **事实(fact)**: 用户确认先选中哪一张行程卡，再点这张卡里的第几天，并要求先写下规划再改。SPEC-007 冻结，ISSUE-010 写下编号、存好的坐标、点选时不拆地图。实现后行程视图、行程解析和上下文测试共 55 项 OK。浏览器 1366 宽：输入在左列内，右缘约 744px，地图从约 777px 开始，图例「还没有地点。」。放进两张卡后，点杭州卡中心到 120.121, 30.223；再点成都第 1 天，图例是「成都三天，轻松不赶 · 第 1 天 · 宽窄巷子 → 人民公园」，中心约 104.058, 30.665，地图画布还是同一个。
+- **推断(inference)**: 无。
+- **决定(decision)**: 只问天气不是行程卡，不换地图。新卡默认选中第 1 天。坐标在这一句结束时写入这张卡。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 刷新页面后再问两句行程，点上面那张卡和它的某一天。
+- **限制(limit)**: 浏览器里的两张卡是放进去的坐标，不是再跑一遍真实模型。
+- **下一步(next_owner / due_at)**: 无。
+
+### 2026-10-22: 急不急只由用户说
+
+- **出现位置**: `PLAN.md` 下一步
+- **事实(fact)**: 白点、最后一天连线、滑动换天是看完原话后直接改的代码，没有先写任务。用户问是不是又因为觉得很急。用户接着说：很急会由用户自己告诉。
+- **推断(inference)**: 无。
+- **决定(decision)**: 不能用「不对啊」、刚改完的页面或语气自行判断很急。用户没说很急，就先写任务和通过标准，确认后再改代码。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 无。
+- **限制(limit)**: 已经直接改过的白点和滑动条，不能改写成事先确认过。
+- **下一步(next_owner / due_at)**: 下一条意见先出任务。
+
+### 2026-10-22: 撤销未确认的滑动条和白点修改
+
+- **出现位置**: `ui.py`；`assets/trip-map.js`；`assets/custom.css`；`itinerary_view.py`
+- **事实(fact)**: 用户看了直接改上的白点、滑动换天和对话位置，说根本不对，要求撤销。已撤掉滑动条，天数按钮恢复，标点恢复成带序号的小圆点，对话仍在输入框上方。左列行程卡和 ISSUE-010 里确认过的行为留着。
+- **推断(inference)**: 无。
+- **决定(decision)**: 这次未确认的修改不保留。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 无。
+- **限制(limit)**: 页面需要刷新后才是撤掉之后的样子。
+- **下一步(next_owner / due_at)**: 无。
+
+### 2026-10-22: 聊天框常在、白点、连线，先写任务
+
+- **出现位置**: `docs/issues/ISSUE-011-chat-frame-pin-line.md`
+- **事实(fact)**: 用户说明提问框要放在聊天记录框下面，聊天框从打开就在，有内容再往里加，不是取消聊天框等回答后再刷新出来。接着要求修正白点，以及只要满足连线条件就连线。本次只写任务和效果图，不改产品代码。
+- **推断(inference)**: 无。
+- **决定(decision)**: 连线条件仍是这一天不少于 2 个坐标点，满足就画，包括最后一天。只有 1 个点不画线。第几天按钮保留，不用滑动条。白底建议改成透明，只留小的颜色数字，待确认。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 无。
+- **限制(limit)**: 确认前不能把建议写成已经改上页面。
+- **下一步(next_owner / due_at)**: 用户确认 ISSUE-011，或改白点做法、连线条件。
+
+### 2026-10-22: 聊天框常在，白点和连线已按确认改
+
+- **出现位置**: `itinerary_view.py`；`assets/custom.css`；`assets/trip-map.js`；`docs/issues/ISSUE-011-chat-frame-pin-line.md`
+- **事实(fact)**: 用户确认 ISSUE-011。聊天记录框打开就在，提问框在下面，两轮问答进同一个框。标点白底改为透明，数字圆点 22px。选中的那一天有不少于 2 个坐标点就画线，包括最后一天；只有 1 个点不画线。第几天按钮还在。`tests.test_itinerary_view` 22 项 OK。浏览器里聊天框在提问框上方；第 2 天两个点画出「雷峰塔 → 河坊街」，标点底透明。
+- **推断(inference)**: 无。
+- **决定(decision)**: 路线数组空着但地点不少于 2 个时，仍按这些地点的坐标连线。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 刷新页面后再看。
+- **限制(limit)**: 浏览器里的第 2 天线是放进去的坐标，不是再跑一遍真实模型。
+- **下一步(next_owner / due_at)**: 无。
+
+### 2026-10-22: 没对上的地点由页面补搜，先写任务
+
+- **出现位置**: `docs/issues/ISSUE-012-fill-missing-place-coords.md`
+- **事实(fact)**: 用户同意不能只把详情上限从 6 改成 12。名字没对上的，由页面按地点名再搜一次，一条一条查，不交给模型。搜到唯一编号再查详情。补搜和详情合计最多 12 次，按天轮流。少于 2 个坐标点仍不画线。本次只写任务，不改产品代码。
+- **推断(inference)**: 无。
+- **决定(decision)**: 确认前不改 `itinerary.py`。
+- **外部待办(external_blocker)**: 无。
+- **建议(suggestion)**: 无。
+- **限制(limit)**: 旧的行程卡不会因为这份任务自动重查。
+- **下一步(next_owner / due_at)**: 用户确认 ISSUE-012，或改 12 次的算法。
+
+### 2026-10-22: 没对上的地点由页面补搜已接上
+
+- **出现位置**: `itinerary.py` 的 `collect_pois`；`ui.py` 的补搜
+- **事实(fact)**: 用户确认 ISSUE-012。名字对不上唯一一条时，页面按地点名再搜一次。唯一命中才查详情。补搜和详情合计最多 12 次，按天轮流，一条一条查。模型仍是一轮一次搜索、一次天气。`tests.test_itinerary` 22 项 OK。
+- **推断(inference)**: 无。
+- **决定(decision)**: 已经存在的行程卡不重查。
+- **外部待办(external_blocker)**: 真实提问里第 3 天补上的地点还没有日志，pending_external。
+- **建议(suggestion)**: 刷新后再问一次北京三日游，然后点第 3 天。
+- **限制(limit)**: 离线通过不能代替真实高德返回。
+- **下一步(next_owner / due_at)**: 下一次真实提问后看第 3 天是否有坐标。
+
+### 2026-10-23: PR #3 审查问题修复（ISSUE-015）
+
+- **出现位置**: `itinerary.py` 的 `_HostBudget`、`_fill_stop_coords`、`_fetch_details`；`readme.md`；PR #3 的换行符
+- **事实(fact)**: 审查发现高德不通时页面补查不停，12 次 × 10 秒最多卡 120 秒。现在第一次失败（异常、空、「工具执行失败」文字）就停，模拟高德不通只调用 1 次。失败前查到的坐标保留。单测 77 项 OK；`itinerary.py` 覆盖率 83%，`itinerary_view.py` 87%。README 补了 JS key，去掉「并行调用、路线规划」。PR 里 14 个文件被存成 CRLF，原因是用 WSL 的 git（`bash -lc`）暂存，没走 Windows 的 `autocrlf`。
+- **推断(inference)**: 无。
+- **决定(decision)**: 本仓库的 git 暂存与提交一律用 Windows git，不用 `bash -lc`。
+- **外部待办(external_blocker)**: 界面截图由用户截取，放到 `docs/images/ui-preview.png`。
+- **建议(suggestion)**: 无。
+- **限制(limit)**: 「失败就停」也会让一次额度超限后的补查全部跳过，这一次的地图点会少。
+- **下一步(next_owner / due_at)**: 用户放入截图后提交；ISSUE-008、012 真实日志仍待补。

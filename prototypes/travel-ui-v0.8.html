@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>旅游助手界面原型 v0.8</title>
+  <style>
+    :root { --ink: #172433; --muted: #5d7082; --line: #d5e0ea; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body { display: flex; flex-direction: column; color: var(--ink); background: #e7eef3; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    button, input { font: inherit; }
+    .review { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 14px; background: white; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    .states { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .states button, .textish { border: 0; background: transparent; color: var(--muted); border-radius: 999px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+    .states button[aria-pressed="true"] { background: var(--ink); color: white; }
+    .app { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px 1fr; }
+    .list { overflow: auto; padding: 18px 16px 90px; background: white; border-right: 1px solid var(--line); }
+    .kicker { margin: 0; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; }
+    h1 { margin: 4px 0 0; font-size: 32px; letter-spacing: -0.04em; }
+    .meta { margin: 6px 0 12px; color: var(--muted); }
+    .day { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--line); background: transparent; padding: 12px 0; cursor: pointer; }
+    .day b { display: block; }
+    .day span { color: var(--muted); font-size: 13px; }
+    .day[aria-pressed="true"] b { color: #157a9e; }
+    .miss { color: #9f2d22; }
+    .map { position: relative; min-height: 0; background: #d7ebdd; }
+    .map svg { width: 100%; height: 100%; display: block; }
+    #route { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    .dock { position: absolute; left: 336px; right: 14px; bottom: 14px; display: flex; gap: 8px; padding: 8px; background: white; border-radius: 14px; }
+    .dock input { flex: 1; border: 0; background: #f3f6f8; border-radius: 10px; padding: 10px 12px; }
+    .send { border: 0; background: #157a9e; color: white; border-radius: 10px; padding: 0 14px; cursor: pointer; }
+    @media (max-width: 860px) { body { height: auto; } .app { grid-template-columns: 1fr; } .map { min-height: 420px; } .dock { left: 14px; } }
+  </style>
+</head>
+<body>
+  <div class="review">
+    <div><b>历史快照 v0.8</b>（截至 2026-10-20，当前见 v0.11）· 电子地图示意。</div>
+    <div class="states">
+      <button type="button" data-scene="empty">空</button>
+      <button type="button" data-scene="places">没说天数</button>
+      <button type="button" data-scene="three" aria-pressed="true">三天</button>
+      <button type="button" data-scene="seven">七天</button>
+      <button type="button" data-scene="fail">失败</button>
+    </div>
+  </div>
+  <main class="app">
+    <section class="list" id="list"></section>
+    <section class="map">
+      <svg viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid slice">
+        <rect width="1000" height="640" fill="#d7ebdd"/>
+        <path d="M0 400 C160 360 240 490 420 450 C640 400 720 530 1000 480 L1000 640 L0 640 Z" fill="#c5e3d2"/>
+        <path d="M60 30 C190 120 170 250 310 310 C470 380 450 490 640 530 C780 562 880 600 1000 630" fill="none" stroke="#9fd0de" stroke-width="22"/>
+        <path d="M20 190 H380 M230 40 V360 M410 150 H1000 M140 520 H820" fill="none" stroke="white" stroke-width="8" opacity=".8"/>
+        <path id="route"></path>
+        <g id="pins"></g>
+      </svg>
+      <form class="dock" id="form">
+        <input id="input" aria-label="出行需求" />
+        <button class="textish" id="clear" type="button">清空</button>
+        <button class="send" type="submit">发送</button>
+      </form>
+    </section>
+  </main>
+  <script>
+    const list = document.getElementById("list");
+    const route = document.getElementById("route");
+    const pins = document.getElementById("pins");
+    const input = document.getElementById("input");
+    const colors = ["#e07a3d", "#1f7a8c", "#3c7d55", "#c4516c", "#6b5bd2", "#b8860b", "#3d6b9a"];
+    const three = [[["熊猫基地", 180, 250, "上午"], ["宽窄巷子", 300, 360, "下午"]], [["人民公园", 450, 270, "喝茶"], ["火锅", 540, 400, "晚饭"]], [["近郊", 760, 180, "半天"]]];
+    const seven = [[["熊猫基地", 150, 220, "上午"]], [["宽窄巷子", 250, 340, "老城"]], [["人民公园", 390, 250, "喝茶"]], [["博物馆", 480, 370, "室内"]], [["东郊", 640, 300, "小馆"]], [["河岸", 760, 450, "傍晚"]], [["近郊", 840, 160, "半天"]]];
+    const loose = [["熊猫基地", 180, 250, "还没排进某一天"], ["宽窄巷子", 300, 360, "还没排进某一天"], ["人民公园", 450, 270, "还没排进某一天"]];
+    let scene, selected = 0;
+    function show(name) {
+      selected = 0;
+      const scenes = {
+        empty: { city: "还没有", meta: "说一个城市后再标点。", days: null, places: [], note: "", placeholder: "成都两天，轻松一点" },
+        places: { city: "成都", meta: "还没说天数，只有点，没有线。", days: null, places: loose, note: "", placeholder: "可以接着说排成三天" },
+        three: { city: "成都", meta: "三天 · 轻松不赶 · 多云 18–26℃", days: three, places: [], note: "", placeholder: "点左边某一天，线只画这一天" },
+        seven: { city: "成都", meta: "七天 · 轻松不赶", days: seven, places: [], note: "", placeholder: "七天不换布局" },
+        fail: { city: "成都", meta: "三天 · 上一句没查到", days: three, places: [], note: "这次没查到丽江的天气。没有新的点。", placeholder: "成都两天，轻松一点" }
+      };
+      scene = scenes[name];
+      document.querySelectorAll(".states button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.scene === name)));
+      render();
+    }
+    function render() {
+      const rows = (scene.days || []).map((stops, index) => `<button class="day" type="button" data-day="${index}" aria-pressed="${index === selected}"><b>第 ${index + 1} 天 · ${stops[0][0]}</b><span>${stops.map((stop) => stop[0]).join(" → ")}</span></button>`).join("");
+      const looseRows = scene.places.map((stop) => `<p class="day"><b>${stop[0]}</b><span>${stop[3]}</span></p>`).join("");
+      list.innerHTML = `<p class="kicker">这次行程</p><h1>${scene.city}</h1><p class="meta">${scene.meta}</p>${scene.note ? `<p class="miss">${scene.note}</p>` : ""}${rows || looseRows}`;
+      list.querySelectorAll("[data-day]").forEach((button) => button.addEventListener("click", () => { selected = Number(button.dataset.day); render(); }));
+      input.placeholder = scene.placeholder;
+      const groups = scene.days || [scene.places];
+      pins.innerHTML = groups.map((stops, index) => stops.map((stop) => {
+        const faded = scene.days && index !== selected;
+        return `<g opacity="${faded ? .35 : 1}"><circle cx="${stop[1]}" cy="${stop[2]}" r="7" fill="${colors[index % colors.length]}" stroke="white" stroke-width="2"/><text x="${stop[1]}" y="${stop[2] - 12}" text-anchor="middle" font-size="13" fill="#172433" font-family="Segoe UI, Microsoft YaHei, sans-serif">${stop[0]}</text></g>`;
+      }).join("")).join("");
+      if (!scene.days) { route.setAttribute("d", ""); return; }
+      const stops = scene.days[selected];
+      route.setAttribute("d", stops.map((stop, index) => `${index ? "L" : "M"}${stop[1]} ${stop[2]}`).join(" "));
+      route.setAttribute("stroke", colors[selected % colors.length]);
+      const length = route.getTotalLength();
+      route.style.transition = "none";
+      route.style.strokeDasharray = String(length);
+      route.style.strokeDashoffset = String(length);
+      requestAnimationFrame(() => { route.style.transition = "stroke-dashoffset .7s ease"; route.style.strokeDashoffset = "0"; });
+    }
+    document.querySelectorAll(".states button").forEach((button) => button.addEventListener("click", () => show(button.dataset.scene)));
+    document.getElementById("clear").addEventListener("click", () => { input.value = ""; show("empty"); });
+    document.getElementById("form").addEventListener("submit", (event) => event.preventDefault());
+    show("three");
+  </script>
+</body>
+</html>

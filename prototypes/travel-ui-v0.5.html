@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>旅游助手界面原型 v0.5</title>
+  <style>
+    :root {
+      --ink: #1b2836;
+      --muted: #66788a;
+      --line: #e4ebf2;
+      --sea: #157a9e;
+      --d1: #e07a3d;
+      --d2: #1f7a8c;
+      --d3: #3c7d55;
+      --paper: #f5f8fb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    button, input { font: inherit; }
+    .review {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 8px 16px;
+      background: white;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .states { display: flex; gap: 6px; }
+    .states button, .textish {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 5px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .states button[aria-pressed="true"] { background: var(--ink); color: white; }
+    .app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px 0;
+    }
+    .top h1 { margin: 0; font-size: 18px; }
+    .split { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px 1fr; gap: 14px; padding: 12px 18px; }
+    .list, .map {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      min-height: 0;
+    }
+    .list { overflow: auto; padding: 18px 18px 8px; }
+    .kicker { margin: 0; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; }
+    .list h2 { margin: 4px 0 0; font-size: 32px; letter-spacing: -0.04em; }
+    .meta { margin: 6px 0 16px; color: var(--muted); }
+    .day { display: grid; grid-template-columns: 18px 1fr; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; }
+    .day b { display: block; font-size: 16px; }
+    .day span { color: var(--muted); font-size: 13px; }
+    .ask { margin: 0 0 12px; color: var(--muted); }
+    .ask b { color: var(--ink); }
+    .miss { margin: 0 0 14px; padding: 12px 0; border-top: 1px solid var(--line); color: #b42318; }
+    .pick { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 14px 0; cursor: pointer; }
+    .pick b { display: block; font-size: 18px; }
+    .pick span { color: var(--muted); font-size: 13px; }
+    .ghost { height: 12px; margin: 12px 0; border-radius: 999px; background: linear-gradient(90deg, #e8eef4, #fff, #e8eef4); background-size: 200% 100%; animation: shine 1.1s linear infinite; }
+    .ghost.short { width: 55%; }
+    @keyframes shine { to { background-position: -200% 0; } }
+    .map { position: relative; overflow: hidden; background: #d7ebdd; }
+    .map svg { width: 100%; height: 100%; display: block; }
+    .pin {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .pin i {
+      width: 14px;
+      height: 14px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 2px solid white;
+      box-shadow: 0 4px 10px rgba(20, 40, 30, 0.18);
+    }
+    .note {
+      position: absolute;
+      left: 14px;
+      bottom: 14px;
+      margin: 0;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.9);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .dock {
+      display: flex;
+      gap: 8px;
+      margin: 0 18px 14px;
+      padding: 8px;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+    .dock input { flex: 1; border: 0; background: #f4f7fa; border-radius: 10px; padding: 12px 14px; color: var(--ink); }
+    .send { border: 0; background: var(--sea); color: white; border-radius: 10px; padding: 0 16px; cursor: pointer; }
+    .drawer { position: fixed; top: 0; right: 0; width: min(320px, 100%); height: 100%; background: white; border-left: 1px solid var(--line); padding: 18px; transform: translateX(100%); transition: transform 0.2s ease; }
+    .drawer.open { transform: translateX(0); }
+    .drawer pre { white-space: pre-wrap; background: #f4f7fa; padding: 12px; font-size: 12px; }
+    @media (max-width: 860px) {
+      body { height: auto; }
+      .split { grid-template-columns: 1fr; }
+      .map { min-height: 360px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="review">
+    <div><b>界面原型 v0.5</b> · 当前这一版。示意地图，不连接模型和地图。</div>
+    <div class="states" role="group" aria-label="切换状态">
+      <button type="button" data-state="empty" aria-pressed="true">空</button>
+      <button type="button" data-state="loading">加载</button>
+      <button type="button" data-state="ok">正常</button>
+      <button type="button" data-state="fail">失败</button>
+    </div>
+  </div>
+  <main class="app">
+    <header class="top">
+      <h1>旅游助手</h1>
+      <button class="textish" id="dev" type="button">开发者</button>
+    </header>
+    <div class="split">
+      <section class="list" id="list"></section>
+      <section class="map" id="map"></section>
+    </div>
+    <form class="dock" id="form">
+      <input id="input" aria-label="出行需求" placeholder="成都两天，轻松一点" />
+      <button class="textish" id="clear" type="button">清空</button>
+      <button class="send" type="submit">发送</button>
+    </form>
+  </main>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <h2>开发者</h2>
+    <p>日志不占行程和地图。这里是演示。</p>
+    <pre id="log">（本次尚无日志）</pre>
+    <button class="textish" id="close-dev" type="button">关闭</button>
+  </aside>
+  <script>
+    const list = document.getElementById("list");
+    const map = document.getElementById("map");
+    const input = document.getElementById("input");
+    const log = document.getElementById("log");
+    const drawer = document.getElementById("drawer");
+    const baseMap = `
+      <svg viewBox="0 0 640 720" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <rect width="640" height="720" fill="#d7ebdd"/>
+        <path d="M0 430 C120 400 180 520 300 490 C430 456 480 560 640 520 L640 720 L0 720 Z" fill="#b7ddc4"/>
+        <path d="M40 80 C160 140 150 260 250 300 C360 346 340 470 470 520 C560 556 600 640 640 690" fill="none" stroke="#8ec4d8" stroke-width="28" stroke-linecap="round"/>
+        <path d="M-10 210 H220 M180 40 V300 M300 160 H660 M120 560 H520" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="8" stroke-linecap="round"/>
+        <ellipse cx="250" cy="250" rx="54" ry="36" fill="#c5e6cf"/>
+      </svg>`;
+    const chengduPins = [
+      ["22%", "30%", "var(--d1)", "熊猫基地"],
+      ["34%", "46%", "var(--d1)", "宽窄巷子"],
+      ["48%", "40%", "var(--d2)", "人民公园"],
+      ["56%", "56%", "var(--d2)", "火锅"],
+      ["70%", "24%", "var(--d3)", "近郊"]
+    ];
+    function pins(items) {
+      return items.map(([top, left, color, name]) =>
+        `<span class="pin" style="top:${top};left:${left}"><i style="background:${color}"></i>${name}</span>`
+      ).join("");
+    }
+    function drawMap(items, note) {
+      map.innerHTML = baseMap + pins(items) + `<p class="note">${note}</p>`;
+    }
+    const views = {
+      empty: {
+        placeholder: "成都两天，轻松一点",
+        log: "（本次尚无日志）",
+        list: `<p class="kicker">这次行程</p><h2>还没有</h2><p class="meta">选一个城市，右边会出现地点。</p>
+          <button class="pick" type="button" data-fill="成都两天，轻松不赶，帮我简单安排"><b>成都</b><span>两天 · 轻松</span></button>
+          <button class="pick" type="button" data-fill="杭州周末，西湖附近走走"><b>杭州</b><span>周末 · 湖边</span></button>
+          <button class="pick" type="button" data-fill="北京三天，别太赶"><b>北京</b><span>三天 · 城里</span></button>`,
+        pins: [],
+        note: "还没有地点"
+      },
+      loading: {
+        placeholder: "成都两天，轻松一点",
+        log: "正在查询高德…",
+        list: `<p class="kicker">这次行程</p><h2>成都</h2><p class="meta">两天 · 轻松不赶 · 本句指定</p><p class="ask">正在把地点标到地图上。</p><div class="ghost"></div><div class="ghost"></div><div class="ghost short"></div>`,
+        pins: [["40%", "42%", "var(--sea)", "正在查"]],
+        note: "示意地图"
+      },
+      ok: {
+        placeholder: "接着改，比如换成丽江",
+        log: "maps_text_search city=成都\nmaps_weather city=成都",
+        list: `<p class="kicker">这次行程</p><h2>成都</h2><p class="meta">三天 · 轻松不赶 · 多云 18–26℃</p><p class="ask">你说：<b>改成三天</b></p>
+          <div class="day"><i class="dot" style="background:var(--d1)"></i><div><b>第 1 天 · 熊猫和老城</b><span>熊猫基地，然后宽窄巷子</span></div></div>
+          <div class="day"><i class="dot" style="background:var(--d2)"></i><div><b>第 2 天 · 市区</b><span>人民公园，顺路吃火锅</span></div></div>
+          <div class="day"><i class="dot" style="background:var(--d3)"></i><div><b>第 3 天 · 近郊半天</b><span>上午出城，下午留在市区</span></div></div>`,
+        pins: chengduPins,
+        note: "示意地图 · 颜色代表第几天"
+      },
+      fail: {
+        placeholder: "成都两天，轻松一点",
+        log: "maps_weather 失败：额度超限",
+        list: `<p class="kicker">这次行程</p><h2>成都</h2><p class="meta">三天 · 轻松不赶 · 上一轮还在</p><p class="ask">你说：<b>丽江今天天气</b></p><p class="miss">这次没查到。高德没有返回丽江的天气，所以地图上没有新的点。</p>
+          <div class="day"><i class="dot" style="background:var(--d1)"></i><div><b>第 1 天 · 熊猫和老城</b><span>还是上一轮的成都</span></div></div>`,
+        pins: chengduPins,
+        note: "丽江没查到 · 仍是成都的点"
+      }
+    };
+    function render(name) {
+      const view = views[name];
+      list.innerHTML = view.list;
+      drawMap(view.pins, view.note);
+      input.placeholder = view.placeholder;
+      log.textContent = view.log;
+      document.querySelectorAll(".states button").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.state === name));
+      });
+      list.querySelectorAll("[data-fill]").forEach((button) => {
+        button.addEventListener("click", () => { input.value = button.dataset.fill; input.focus(); });
+      });
+    }
+    document.querySelectorAll(".states button").forEach((button) => {
+      button.addEventListener("click", () => render(button.dataset.state));
+    });
+    function setDrawer(open) {
+      drawer.classList.toggle("open", open);
+      drawer.setAttribute("aria-hidden", String(!open));
+    }
+    document.getElementById("dev").addEventListener("click", () => setDrawer(true));
+    document.getElementById("close-dev").addEventListener("click", () => setDrawer(false));
+    document.getElementById("clear").addEventListener("click", () => { input.value = ""; render("empty"); });
+    document.getElementById("form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      input.placeholder = "原型不会真的发送。用顶部状态看加载、正常和失败。";
+    });
+    render("empty");
+  </script>
+</body>
+</html>

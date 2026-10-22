@@ -4,6 +4,6 @@ langchain-community>=0.3.0
 langchain-mcp-adapters>=0.0.8
 dashscope>=1.14.0
 
-gradio>=4.1.0
+gradio>=6.0.0
 python-dotenv>=1.0.0
 anyio>=4.0.0

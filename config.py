@@ -14,7 +14,8 @@ class Config:
     MAX_TOOL_ROUNDS: int = 1
 
     # 模型输出配置
-    MAX_OUTPUT_TOKENS: int = 1200
+    # 详细行程还要在文末附 json，1200 会把代码块截断，解析不出来
+    MAX_OUTPUT_TOKENS: int = 4096
     ENABLE_THINKING: bool = True
     INCREMENTAL_OUTPUT: bool = True
 
@@ -32,6 +33,9 @@ class Config:
 # 环境变量（对外暴露，方便其它模块直接使用）
 DASHSCOPE_API_KEY: str | None = os.getenv("DASHSCOPE_API_KEY")
 AMAP_MCP_URL: str | None = os.getenv("AMAP_MCP_URL")
+# Web 端 JS 与 MCP 的 key 分开。缺省时地图区显示「地图暂不可用」。
+AMAP_JS_KEY: str = os.getenv("AMAP_JS_KEY") or ""
+AMAP_JS_SECURITY_CODE: str = os.getenv("AMAP_JS_SECURITY_CODE") or ""
 
 # qwen-turbo 已于 2026-10-10 下线。新模型走兼容接口，不用旧的 Generation 接口。
 MODEL_NAME: str = "qwen3.8-flash"

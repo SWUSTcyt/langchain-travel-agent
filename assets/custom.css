@@ -10,10 +10,16 @@
   --ta-shadow: 0 6px 24px rgba(13, 148, 136, 0.10);
 }
 
-/* 整体容器收窄居中，留白更舒展 */
-.gradio-container {
-  max-width: 1180px !important;
+/* 文字约 58%，地图约 42%。Gradio 主题会把容器收窄，这里拉开。 */
+.gradio-container,
+.gradio-container main.app {
+  max-width: none !important;
+  width: 100% !important;
   margin: 0 auto !important;
+}
+.gradio-container {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
 }
 
 /* ===== 顶部品牌区 ===== */
@@ -85,14 +91,16 @@
 
 /* ===== 输入区 ===== */
 #ta-input textarea {
-  border-radius: 12px !important;
-  font-size: .98rem;
+  border-radius: 14px !important;
+  font-size: 1rem !important;
+  border: 1px solid #e3e9ef !important;
 }
 #ta-send {
   background: linear-gradient(120deg, var(--ta-brand-1), var(--ta-brand-2)) !important;
   color: #fff !important;
   border: none !important;
-  border-radius: 12px !important;
+  border-radius: 14px !important;
+  min-height: 44px;
   font-weight: 650 !important;
 }
 #ta-clear {
@@ -106,9 +114,108 @@
   color: #0f172a;
 }
 
-/* ===== 响应式：移动端单栏 ===== */
+/* ===== 行程文字 + 地图 ===== */
+#ta-text-card, #ta-map-card {
+  background: #fff;
+  border: 1px solid #e3e9ef;
+  border-radius: 16px;
+  padding: 12px 16px !important;
+  min-width: 0;
+}
+#ta-main-row {
+  width: 100% !important;
+  min-height: calc(100vh - 150px);
+  align-items: stretch !important;
+}
+#ta-text-card, #ta-map-card {
+  min-height: calc(100vh - 160px);
+}
+#ta-text-card {
+  flex: 58 1 0% !important;
+  max-height: none;
+  overflow: hidden;
+  display: flex !important;
+  flex-direction: column !important;
+}
+#ta-map-card { flex: 42 1 0% !important; max-height: none; }
+#ta-chat-log {
+  box-sizing: border-box;
+  height: calc(100vh - 280px);
+  min-height: 320px;
+  max-height: none;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #d5dee6;
+  border-radius: 12px;
+  background: #f6f8fa;
+  padding: 12px 14px;
+}
+.trip-thread { max-height: none; overflow: visible; }
+.trip-thread .trip-text { max-height: none; overflow: visible; }
+.trip-text, .trip-answer, .empty { max-height: calc(100vh - 220px); overflow: auto; }
+.turn-card, .turn-note { margin: 0 0 16px; }
+.turn-card { border: 1px solid transparent; border-radius: 12px; padding: 8px; cursor: pointer; }
+.turn-card[data-selected="true"] { border-color: #0f7c9c; background: #f4fbfc; }
+.who { margin: 0; color: #5f7183; }
+.said { margin: 0 0 8px; font-weight: 650; }
+.turn-map { display: none !important; }
+.empty-ask h1, .pending h1, .trip-text h1 { margin: 0 0 8px; font-size: 1.6rem; color: #15212e; }
+.pending .ask, .empty-ask .ask { color: #0f7c9c; font-weight: 650; }
+.empty-ask .lead, .pending .day p { color: #5f7183; line-height: 1.6; }
+.picks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.picks-follow { margin-top: auto; padding-top: 16px; }
+.picks-follow .ask { grid-column: 1 / -1; margin: 0; }
+.picks button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  text-align: left; border: 1px solid #e3e9ef; background: #fff; border-radius: 14px;
+  padding: 12px 14px; cursor: pointer;
+}
+.picks button b { font-size: 1rem; }
+.picks button span { color: #5f7183; font-size: .9rem; }
+.picks button:hover { border-color: #0f7c9c; }
+.amap-icon, .amap-marker, .amap-marker-content { background: transparent !important; }
+.amap-icon { display: none !important; }
+.map-pin {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; background: transparent;
+  border: none; padding: 0; box-shadow: none;
+}
+.map-pin i {
+  width: 22px; height: 22px; border-radius: 50%; background: #0f7c9c; color: #fff;
+  font-style: normal; display: flex; align-items: center; justify-content: center; font-size: 12px;
+}
+.map-pin span { display: none; }
+.map-pop { min-width: 160px; color: #15212e; }
+.map-pop b { display: block; margin-bottom: 4px; }
+.map-pop p { margin: 0; color: #5f7183; }
+.ask, .when, .go, .tip { color: #5f7183; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.tabs button {
+  border: 0; border-radius: 999px; padding: 6px 12px; background: #eef2f5; cursor: pointer;
+}
+.tabs button[aria-pressed="true"] { background: #15212e; color: #fff; }
+.day { margin-bottom: 16px; }
+.day.faded { opacity: .45; }
+.stop { display: flex; gap: 12px; padding: 8px; border-radius: 12px; }
+.stop.hit { background: #e7f5f8; }
+.when { width: 3em; flex: none; }
+.map-canvas { height: calc(100vh - 220px); min-height: 320px; border-radius: 12px; }
+.map-fallback {
+  height: calc(100vh - 220px); min-height: 320px; display: flex; align-items: center;
+  justify-content: center; color: #5f7183; background: #f6f8fa; border-radius: 12px;
+}
+#trip-map-payload { position: absolute !important; left: -9999px !important; width: 1px !important; height: 1px !important; overflow: hidden !important; }
+#trip-map-legend { color: #5f7183; font-size: .9rem; }
+
+/* ===== 响应式：窄屏文字在上，地图在下 ===== */
 @media (max-width: 860px) {
   #ta-main-row { flex-direction: column !important; }
   #ta-header h1 { font-size: 1.25rem; }
   .gradio-container { padding: 0 8px !important; }
+  .map-canvas, .map-fallback { height: 260px; min-height: 260px; }
+  #ta-text-card, #ta-map-card { min-height: 0; height: auto; }
+  #ta-chat-log { height: 420px; min-height: 240px; }
+  .trip-text, .trip-answer, .empty { max-height: none; }
+  .picks { grid-template-columns: 1fr; }
 }

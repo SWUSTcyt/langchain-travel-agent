@@ -1,4 +1,16 @@
+---
+spec_id: SPEC-003
+title: 旅游助手前端现代化
+status: Frozen
+version: 1
+parent: SPEC-001
+supersedes:
+superseded_by:
+---
+
 # Spec: 旅游助手前端现代化
+
+> 2026-10-20 只补了上面的编号和 parent，便于挂到 `docs/spec/INDEX.md`。下面的范围、验收和「后端零改动」都没改。状态标 Frozen 是因为这份范围早已确认并已实现；这次没有重跑验收，所以不标 Verified。
 
 > 由 vibe-coding-playbook 的 plan-spec 流程产出。方案 A：保留 Gradio，做现代主题 + 自定义 CSS + 布局重构（纯 Python，后端零改动）。
 

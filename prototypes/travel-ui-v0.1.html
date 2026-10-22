@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>旅游助手界面原型 v0.1</title>
+  <style>
+    :root {
+      --paper: #f4efe6; --sheet: #fffdf8; --ink: #1e1a16; --muted: #6f675e;
+      --line: #e3d9cc; --cinnabar: #9a3412; --moss: #243f34; --moss-soft: #e7f0ea;
+      --fail: #8f2d2d; --fail-soft: #f8ece7; --shadow: 0 18px 50px rgba(60, 40, 20, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; line-height: 1.55; }
+    .review { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; padding: 12px 22px; background: #2a241f; color: #f6f1e8; }
+    .review span { color: #d9cfc2; font-size: 13px; }
+    .states { display: flex; gap: 6px; }
+    .states button, .ghost, .send { font: inherit; cursor: pointer; }
+    .states button { border: 1px solid transparent; background: transparent; color: #f6f1e8; border-radius: 999px; padding: 6px 12px; }
+    .states button[aria-pressed="true"] { background: #f6f1e8; color: #2a241f; }
+    .product { width: min(1120px, calc(100% - 32px)); margin: 28px auto 48px; }
+    .demo-flag { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+    header.top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
+    header.top h1 { margin: 0; font-size: 28px; font-weight: 650; letter-spacing: -0.03em; }
+    header.top p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+    .ghost { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 999px; padding: 8px 14px; }
+    .trip[hidden] { display: none; }
+    .trip { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 22px; }
+    .trip strong { font-size: 18px; }
+    .trip em { font-style: normal; color: var(--muted); font-size: 13px; }
+    .sheet { background: var(--sheet); border-radius: 18px; box-shadow: var(--shadow); padding: 22px; min-height: 380px; }
+    .ask { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+    .ask b { color: var(--ink); }
+    .empty-title { font-size: 34px; line-height: 1.25; letter-spacing: -0.03em; margin: 28px 0 8px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+    .chips button { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 8px 12px; color: var(--ink); font: inherit; cursor: pointer; }
+    .days { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .day { border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-height: 180px; }
+    .day small { color: var(--cinnabar); font-size: 12px; letter-spacing: 0.08em; }
+    .day h2 { margin: 6px 0 8px; font-size: 18px; }
+    .day p { margin: 0; color: #3f3832; font-size: 14px; }
+    .weather { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 14px; color: var(--moss); background: var(--moss-soft); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+    .fail { background: var(--fail-soft); border-radius: 14px; padding: 18px; }
+    .fail h2 { margin: 0 0 8px; color: var(--fail); font-size: 22px; }
+    .fail p { margin: 0; }
+    .loading-bar { height: 14px; border-radius: 999px; background: linear-gradient(90deg, #efe8dc, #f7f3ec, #efe8dc); background-size: 200% 100%; animation: shine 1.2s linear infinite; margin: 10px 0; }
+    .loading-bar.short { width: 46%; }
+    @keyframes shine { to { background-position: -200% 0; } }
+    .basis { margin-top: 16px; }
+    .basis summary { cursor: pointer; color: var(--muted); }
+    .composer { display: flex; gap: 8px; margin-top: 16px; }
+    .composer input { flex: 1; border: 1px solid var(--line); background: var(--sheet); border-radius: 14px; padding: 14px 16px; font: inherit; color: var(--ink); }
+    .send { border: 0; background: var(--ink); color: #f6f1e8; border-radius: 14px; padding: 0 18px; }
+    .composer .ghost { border-radius: 14px; }
+    .scope { margin-top: 22px; color: var(--muted); font-size: 13px; }
+    .scope ul { margin: 6px 0 0; padding-left: 18px; }
+    .drawer { position: fixed; top: 0; right: 0; width: min(360px, 100%); height: 100%; background: #fffdf8; border-left: 1px solid var(--line); box-shadow: var(--shadow); padding: 22px; transform: translateX(100%); transition: transform 0.2s ease; }
+    .drawer.open { transform: translateX(0); }
+    .drawer pre { white-space: pre-wrap; font-family: Consolas, "Microsoft YaHei", monospace; font-size: 12px; background: #f6f1e8; border-radius: 12px; padding: 12px; }
+    @media (max-width: 800px) { .days { grid-template-columns: 1fr; } .empty-title { font-size: 28px; } }
+  </style>
+</head>
+<body>
+  <div class="review">
+    <div><b>历史快照 v0.1</b> <span>（截至 2026-10-20，当前见 v0.4）。演示数据，不连接模型和地图。</span></div>
+    <div class="states" role="group" aria-label="切换状态">
+      <button type="button" data-state="empty" aria-pressed="true">空</button>
+      <button type="button" data-state="loading">加载</button>
+      <button type="button" data-state="ok">正常</button>
+      <button type="button" data-state="fail">失败</button>
+    </div>
+  </div>
+  <main class="product">
+    <p class="demo-flag">下面这块是当时提议的产品页面。上方黑条是评审用的。</p>
+    <header class="top">
+      <div><h1>旅游助手</h1><p>问一句，按这个城市把行程排开。</p></div>
+      <button class="ghost" id="dev" type="button">开发者</button>
+    </header>
+    <section class="trip" id="trip" hidden>
+      <strong id="trip-title">成都 · 三天 · 轻松不赶</strong>
+      <em id="trip-source">沿用上一轮</em>
+    </section>
+    <section class="sheet" id="sheet"></section>
+    <form class="composer" id="form">
+      <input id="input" aria-label="出行需求" placeholder="想去哪里，待几天" />
+      <button class="ghost" id="clear" type="button">清空</button>
+      <button class="send" type="submit">发送</button>
+    </form>
+    <section class="scope">
+      <ul>
+        <li>改：调试面板不再常驻右侧；城市、天数、节奏放到回答上方；回答按天分成卡片；思考过程默认收起。</li>
+        <li>不改：还是一个输入框；可以清空；开发者日志还在。没有登录页和设置页。</li>
+      </ul>
+    </section>
+  </main>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <h2>开发者</h2>
+    <pre id="log">（本次尚无日志）</pre>
+    <button class="ghost" id="close-dev" type="button">关闭</button>
+  </aside>
+  <script>
+    const sheet = document.getElementById("sheet");
+    const trip = document.getElementById("trip");
+    const tripTitle = document.getElementById("trip-title");
+    const tripSource = document.getElementById("trip-source");
+    const input = document.getElementById("input");
+    const log = document.getElementById("log");
+    const drawer = document.getElementById("drawer");
+    const views = {
+      empty: { trip: false, placeholder: "想去哪里，待几天", log: "（本次尚无日志）", html: `<h2 class="empty-title">想去哪里，<br>待几天。</h2><p>直接说城市和天数。下一句可以只改其中一件。</p><div class="chips"><button type="button" data-fill="成都两天，轻松不赶，帮我简单安排">成都 · 两天 · 轻松</button><button type="button" data-fill="杭州周末，西湖附近走走">杭州 · 周末</button><button type="button" data-fill="北京三天，别太赶">北京 · 三天</button></div>` },
+      loading: { trip: true, title: "成都 · 两天 · 轻松不赶", source: "本句指定", placeholder: "想去哪里，待几天", log: "正在查询高德…", html: `<p class="ask">你说：<b>成都两天，轻松不赶，帮我简单安排</b></p><p>正在查成都的地点和天气。</p><div class="loading-bar"></div><div class="loading-bar"></div><div class="loading-bar short"></div>` },
+      ok: { trip: true, title: "成都 · 三天 · 轻松不赶", source: "沿用上一轮，天数已改成三天", placeholder: "接着改，比如换成丽江", log: "maps_text_search city=成都", html: `<p class="ask">你说：<b>改成三天</b></p><div class="weather"><span>成都 · 多云到阴 · 18–26℃</span><span>演示数据</span></div><div class="days"><article class="day"><small>第 1 天</small><h2>熊猫和老城</h2><p>上午看熊猫基地，下午在宽窄巷子慢慢走。</p></article><article class="day"><small>第 2 天</small><h2>市区慢慢逛</h2><p>人民公园喝茶，顺路吃一家火锅。</p></article><article class="day"><small>第 3 天</small><h2>近郊半天</h2><p>上午出城，下午留在市区。</p></article></div><details class="basis"><summary>查看依据</summary><p>思考过程默认收起。</p></details>` },
+      fail: { trip: true, title: "成都 · 三天 · 轻松不赶", source: "上一轮仍是成都；这一句没查到丽江", placeholder: "想去哪里，待几天", log: "maps_weather 失败：额度超限", html: `<p class="ask">你说：<b>丽江今天天气</b></p><div class="fail"><h2>这次没查到</h2><p>高德没有返回丽江的天气。上一轮的成都行程还留在上面。</p></div>` }
+    };
+    function render(name) {
+      const view = views[name];
+      sheet.innerHTML = view.html;
+      trip.hidden = !view.trip;
+      if (view.trip) { tripTitle.textContent = view.title; tripSource.textContent = view.source; }
+      input.placeholder = view.placeholder;
+      log.textContent = view.log;
+      document.querySelectorAll(".states button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.state === name)));
+      sheet.querySelectorAll("[data-fill]").forEach((button) => button.addEventListener("click", () => { input.value = button.dataset.fill; input.focus(); }));
+    }
+    document.querySelectorAll(".states button").forEach((button) => button.addEventListener("click", () => render(button.dataset.state)));
+    const setDrawer = (open) => { drawer.classList.toggle("open", open); drawer.setAttribute("aria-hidden", String(!open)); };
+    document.getElementById("dev").addEventListener("click", () => setDrawer(true));
+    document.getElementById("close-dev").addEventListener("click", () => setDrawer(false));
+    document.getElementById("clear").addEventListener("click", () => { input.value = ""; render("empty"); });
+    document.getElementById("form").addEventListener("submit", (event) => { event.preventDefault(); });
+    render("empty");
+  </script>
+</body>
+</html>
