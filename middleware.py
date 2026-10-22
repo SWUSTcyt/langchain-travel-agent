@@ -8,6 +8,7 @@
 
 import logging
 import re
+import threading
 from typing import Callable
 
 from langchain.agents.middleware import (
@@ -28,6 +29,7 @@ from langchain_core.messages import (
 )
 
 from config import Config
+from itinerary import ITINERARY_PROMPT
 from tools import get_tool_names_sorted, get_global_tools
 from turn_context import TripState, parse_days, parse_pace
 
@@ -234,20 +236,20 @@ def pin_cities_and_adcodes(state: AgentState, runtime) -> dict | None:
 
     sys_msg = SystemMessage(
         content=(
-            "你是旅行规划助手。需要本地信息时优先使用 MCP(amap-maps) 的工具："
-            "maps_text_search（搜索POI）/ maps_direction_*（路线规划）/ maps_weather（天气查询）。"
-            "风格：\"轻松不赶\"；"
-            "输出包含可验证的检索要点（如POI名、路线段、adcode等）。"
-            "\n【并行调用策略】强烈建议在同一轮中并行调用多个工具以提升效率："
-            "\n- 示例：同时调用 maps_text_search（获取景点）+ maps_direction_driving（规划路线）+ maps_weather（查询天气）"
-            "\n- 优势：一次性收集完整信息，减少往返轮次"
+            "你是旅行规划助手。查当地信息时只用这两个工具，并且只调用一轮："
+            "一次 maps_text_search（这座城市的景点或美食），一次 maps_weather（天气）。"
+            "不要调用 maps_geo、maps_search_detail、maps_direction_*、maps_around_search。"
+            "坐标和点与点之间的连线由系统补，你不要自己写坐标，也不要为每一站再搜一次。"
+            "风格：\"轻松不赶\"。"
+            "地点名必须照抄 maps_text_search 返回的 name。"
             "\n【停止条件-必须遵守】满足以下任一条件时，必须立即停止调用工具，直接给出最终答案："
-            "\n1. 已获取关键信息：目标城市、2-3个POI、基本路线信息"
-            f"\n2. 工具调用达到{Config.MAX_TOOL_ROUNDS}回合上限（严格限制，因启用并行调用）"
+            "\n1. 已经拿到目标城市、若干地点名称和天气"
+            f"\n2. 工具调用达到{Config.MAX_TOOL_ROUNDS}回合上限"
             "\n3. 收到\"强制停止\"提示"
             "\n【执行要求】达到停止条件后，必须直接输出文本答案，禁止继续调用工具。若信息不足，说明\"仍需补充的信息\"。"
             "\n【参数要求】调用地图工具时，必须传入 city 参数（如 city=\"成都\"），否则工具会报错。"
             + city_tips
+            + ITINERARY_PROMPT
             + debug_info
         )
     )
@@ -333,9 +335,101 @@ def inject_budget_status(state: AgentState, runtime) -> dict | None:
 
 # === wrap_tool_call 中间件 ===
 
+def _tool_call_field(req, field: str) -> str:
+    call = getattr(req, "tool_call", None)
+    if isinstance(call, dict):
+        return str(call.get(field) or "")
+    return str(getattr(call, field, "") or "")
+
+
+# 坐标和站与站的连线由页面补。这些工具交给模型会一次打出很多请求，容易把高德额度打满。
+_TOOLS_MODEL_SHOULD_NOT_CALL = {
+    "maps_geo",
+    "maps_search_detail",
+    "maps_around_search",
+    "maps_regeocode",
+    "maps_ip_location",
+}
+
+# 同一轮里这两种只放行第一次。计数在调用处理函数之前加上，第二次即使第一次还没返回也不再打高德。
+_ONCE_PER_ROUND = {
+    "maps_text_search": (
+        "_text_search_count",
+        "本轮已经搜过地点。请直接用刚才的搜索结果写行程，不要再次调用 maps_text_search。",
+    ),
+    "maps_weather": (
+        "_weather_count",
+        "本轮已经查过天气。请直接用刚才的天气结果写行程，不要再次调用 maps_weather。",
+    ),
+}
+_once_lock = threading.Lock()
+
+
+def _once_state(req, tool_name: str):
+    """返回 (state, 计数字段, 拦截说明)。不在本轮次数限制里则返回 None。"""
+    spec = _ONCE_PER_ROUND.get(tool_name)
+    state = getattr(getattr(req, "runtime", None), "state", None)
+    if spec is None or not isinstance(state, dict):
+        return None
+    key, content = spec
+    return state, key, content
+
+
+def _repeat_message(req, tool_name: str):
+    """同一轮已经放过一次时返回说明。还没放过则返回 None，此处不加次数。"""
+    found = _once_state(req, tool_name)
+    if found is None:
+        return None
+    state, key, content = found
+    with _once_lock:
+        already = int(state.get(key) or 0) >= 1
+    if not already:
+        return None
+    return ToolMessage(
+        tool_call_id=_tool_call_field(req, "id") or "skipped",
+        name=tool_name,
+        content=content,
+    )
+
+
+def _mark_once(req, tool_name: str):
+    """即将调用处理函数时记一次。若并发里已经有人记过，返回说明，调用方不要再发出。"""
+    found = _once_state(req, tool_name)
+    if found is None:
+        return None
+    state, key, content = found
+    with _once_lock:
+        count = int(state.get(key) or 0)
+        if count >= 1:
+            already = True
+        else:
+            state[key] = count + 1
+            already = False
+    if not already:
+        return None
+    return ToolMessage(
+        tool_call_id=_tool_call_field(req, "id") or "skipped",
+        name=tool_name,
+        content=content,
+    )
+
+
 @wrap_tool_call
 def track_tool_budget(req, handler):
     """追踪工具调用轮次并在超限时阻止执行（并行调用同一轮只计一次）"""
+    tool_name = _tool_call_field(req, "name")
+    if tool_name in _TOOLS_MODEL_SHOULD_NOT_CALL or tool_name.startswith("maps_direction"):
+        return ToolMessage(
+            tool_call_id=_tool_call_field(req, "id") or "skipped",
+            name=tool_name or "skipped",
+            content=(
+                "这个工具不用调用。地点坐标和从哪一站到下一站由系统补。"
+                "请只用 maps_text_search 和 maps_weather，然后直接写行程。"
+            ),
+        )
+    repeated = _repeat_message(req, tool_name)
+    if repeated is not None:
+        return repeated
     try:
         if hasattr(req, "runtime") and hasattr(req.runtime, "state"):
             current_round = req.runtime.state.get("tool_rounds", 0)
@@ -393,6 +487,9 @@ def track_tool_budget(req, handler):
     except Exception as e:
         logger.warning("[Budget] 工具预算计数异常（继续执行）：%s", e)
 
+    repeated = _mark_once(req, tool_name)
+    if repeated is not None:
+        return repeated
     return handler(req)
 
 

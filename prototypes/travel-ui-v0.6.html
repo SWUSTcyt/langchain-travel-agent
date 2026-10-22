@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>旅游助手界面原型 v0.6</title>
+  <style>
+    :root { --ink: #172433; --muted: #5d7082; --line: #d5e0ea; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      display: flex;
+      flex-direction: column;
+      color: var(--ink);
+      background: #e7eef3;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    button, input { font: inherit; }
+    .review {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 8px 14px;
+      background: white;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .states { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .states button, .textish {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 5px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .states button[aria-pressed="true"] { background: var(--ink); color: white; }
+    .stage { position: relative; flex: 1; min-height: 0; }
+    .stage svg { width: 100%; height: 100%; display: block; background: #d5e7d8; }
+    .hud, .days, .card, .dock, .banner { position: absolute; z-index: 2; }
+    .hud { top: 14px; left: 16px; }
+    .hud h1 { margin: 0; font-size: 18px; }
+    .hud p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+    .days { top: 14px; right: 16px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 46%; }
+    .days button {
+      border: 0;
+      background: white;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 6px 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(23, 36, 51, 0.08);
+    }
+    .days button[aria-pressed="true"] { background: var(--ink); color: white; }
+    .card {
+      left: 16px;
+      bottom: 78px;
+      width: min(280px, calc(100% - 32px));
+      background: white;
+      border-radius: 14px;
+      padding: 12px 14px;
+      box-shadow: 0 8px 24px rgba(23, 36, 51, 0.12);
+    }
+    .card b { display: block; font-size: 16px; }
+    .card span { color: var(--muted); font-size: 13px; }
+    .banner {
+      left: 50%;
+      top: 64px;
+      transform: translateX(-50%);
+      background: #fff4f2;
+      color: #9f2d22;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .dock {
+      left: 16px;
+      right: 16px;
+      bottom: 14px;
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      background: white;
+      border-radius: 14px;
+    }
+    .dock input { flex: 1; border: 0; background: #f3f6f8; border-radius: 10px; padding: 12px 14px; }
+    .send { border: 0; background: #157a9e; color: white; border-radius: 10px; padding: 0 16px; cursor: pointer; }
+    .pin { cursor: pointer; }
+    .pin text { font-size: 13px; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; font-weight: 650; }
+    #route { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+</head>
+<body>
+  <div class="review">
+    <div><b>历史快照 v0.6</b>（整页只有地图，不采用。当前看 v0.7）· 示意地图。</div>
+    <div class="states" role="group" aria-label="切换示例">
+      <button type="button" data-scene="empty">空</button>
+      <button type="button" data-scene="places">没说天数</button>
+      <button type="button" data-scene="three" aria-pressed="true">三天</button>
+      <button type="button" data-scene="seven">七天</button>
+      <button type="button" data-scene="fail">失败</button>
+    </div>
+  </div>
+  <main class="stage">
+    <svg id="map" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid slice">
+      <rect width="1000" height="640" fill="#d7ebdd"/>
+      <path d="M0 390 C180 350 240 470 420 440 C620 406 700 520 1000 470 L1000 640 L0 640 Z" fill="#c3e0cf"/>
+      <path d="M80 40 C180 120 160 230 280 280 C420 338 390 450 560 500 C700 542 820 590 980 620" fill="none" stroke="#9fd0de" stroke-width="26" stroke-linecap="round"/>
+      <path d="M40 180 H360 M250 60 V340 M430 150 H980 M160 520 H780" fill="none" stroke="rgba(255,255,255,.72)" stroke-width="7"/>
+      <path id="route"></path>
+      <g id="pinLayer"></g>
+    </svg>
+    <div class="hud"><h1>旅游助手</h1><p id="status">成都 · 三天 · 轻松不赶</p></div>
+    <div class="days" id="days"></div>
+    <div class="banner" id="banner" hidden>这次没查到。没有新的点，成都的行程还在。</div>
+    <article class="card" id="card" hidden><b id="card-name"></b><span id="card-note"></span></article>
+    <form class="dock" id="form">
+      <input id="input" aria-label="出行需求" placeholder="接着改，比如改成七天" />
+      <button class="textish" id="clear" type="button">清空</button>
+      <button class="send" type="submit">发送</button>
+    </form>
+  </main>
+  <script>
+    const route = document.getElementById("route");
+    const pinLayer = document.getElementById("pinLayer");
+    const daysEl = document.getElementById("days");
+    const card = document.getElementById("card");
+    const status = document.getElementById("status");
+    const banner = document.getElementById("banner");
+    const input = document.getElementById("input");
+    const palette = ["#e07a3d", "#1f7a8c", "#3c7d55", "#c4516c", "#6b5bd2", "#b8860b", "#3d6b9a"];
+    const three = [
+      [["熊猫基地", 180, 250, "上午，人少一些"], ["宽窄巷子", 280, 340, "下午慢慢走"]],
+      [["人民公园", 430, 280, "喝茶"], ["火锅", 520, 390, "晚饭，不赶"]],
+      [["近郊", 700, 160, "上午出城，下午回市区"]]
+    ];
+    const seven = [
+      [["熊猫基地", 160, 230, "第 1 天上午"]],
+      [["宽窄巷子", 250, 330, "老城"]],
+      [["人民公园", 390, 250, "喝茶"]],
+      [["博物馆", 470, 360, "室内，雨天也能去"]],
+      [["东郊", 650, 300, "看一个小馆"]],
+      [["河岸", 760, 430, "傍晚走走"]],
+      [["近郊", 820, 150, "只留半天"]]
+    ];
+    const loose = [
+      ["熊猫基地", 180, 250, "还没排进某一天"],
+      ["宽窄巷子", 280, 340, "还没排进某一天"],
+      ["人民公园", 430, 280, "还没排进某一天"]
+    ];
+    let selectedDay = 0;
+    let selectedStop = null;
+    let current = null;
+
+    function stopsOf(dayIndex) {
+      return current.days ? current.days[dayIndex] : [];
+    }
+
+    function draw() {
+      pinLayer.innerHTML = "";
+      const groups = current.days || [current.places.map((item) => item)];
+      groups.forEach((stops, dayIndex) => {
+        const color = palette[dayIndex % palette.length];
+        const active = !current.days || dayIndex === selectedDay;
+        stops.forEach((stop) => {
+          const faded = current.days && !active;
+          const node = document.createElementNS("http://www.w3.org/2000/svg", "g");
+          node.setAttribute("class", "pin");
+          node.setAttribute("transform", `translate(${stop[1]} ${stop[2]})`);
+          node.innerHTML = `<circle r="8" fill="${color}" stroke="white" stroke-width="2" opacity="${faded ? 0.35 : 1}"></circle><text y="-14" text-anchor="middle" fill="#172433" opacity="${faded ? 0.45 : 1}">${stop[0]}</text>`;
+          node.addEventListener("click", () => {
+            if (current.days) selectedDay = dayIndex;
+            selectedStop = stop;
+            draw();
+          });
+          pinLayer.appendChild(node);
+        });
+      });
+      if (!current.days) {
+        route.setAttribute("d", "");
+      } else {
+        const stops = stopsOf(selectedDay);
+        const d = stops.map((stop, index) => `${index ? "L" : "M"}${stop[1]} ${stop[2]}`).join(" ");
+        route.setAttribute("d", d);
+        route.setAttribute("stroke", palette[selectedDay % palette.length]);
+        const length = route.getTotalLength ? route.getTotalLength() : 0;
+        route.style.strokeDasharray = String(length);
+        route.style.strokeDashoffset = String(length);
+        requestAnimationFrame(() => {
+          route.style.transition = "stroke-dashoffset .8s ease";
+          route.style.strokeDashoffset = "0";
+        });
+      }
+      daysEl.innerHTML = "";
+      if (current.days) {
+        current.days.forEach((_, index) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = `第 ${index + 1} 天`;
+          button.setAttribute("aria-pressed", String(index === selectedDay));
+          button.addEventListener("click", () => {
+            selectedDay = index;
+            selectedStop = stopsOf(index)[0];
+            draw();
+          });
+          daysEl.appendChild(button);
+        });
+      }
+      status.textContent = current.status;
+      banner.hidden = !current.fail;
+      if (selectedStop) {
+        card.hidden = false;
+        document.getElementById("card-name").textContent = selectedStop[0];
+        document.getElementById("card-note").textContent = selectedStop[3];
+      } else {
+        card.hidden = true;
+      }
+      input.placeholder = current.placeholder;
+    }
+
+    function show(scene) {
+      selectedDay = 0;
+      selectedStop = null;
+      const scenes = {
+        empty: { status: "还没有行程", placeholder: "成都两天，轻松一点", days: null, places: [], fail: false },
+        places: { status: "成都 · 还没说天数", placeholder: "可以接着说排成三天", days: null, places: loose, fail: false },
+        three: { status: "成都 · 三天 · 轻松不赶", placeholder: "接着改，比如改成七天", days: three, fail: false },
+        seven: { status: "成都 · 七天 · 轻松不赶", placeholder: "点上面的某一天，只看这一天的线", days: seven, fail: false },
+        fail: { status: "成都 · 三天 · 上一句没查到", placeholder: "成都两天，轻松一点", days: three, fail: true }
+      };
+      current = scenes[scene];
+      if (current.days) selectedStop = current.days[0][0];
+      document.querySelectorAll(".states button").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.scene === scene));
+      });
+      draw();
+    }
+
+    document.querySelectorAll(".states button").forEach((button) => {
+      button.addEventListener("click", () => show(button.dataset.scene));
+    });
+    document.getElementById("clear").addEventListener("click", () => { input.value = ""; show("empty"); });
+    document.getElementById("form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      input.placeholder = "原型不会真的发送。用顶部示例看三天、七天和失败。";
+    });
+    show("three");
+  </script>
+</body>
+</html>

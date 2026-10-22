@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>旅游助手界面原型 v0.10</title>
+  <style>
+    :root { --ink: #1b2836; --muted: #66788a; --line: #e5ebf1; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body { display: flex; flex-direction: column; background: #f4f7fa; color: var(--ink); font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    button, input { font: inherit; }
+    .review { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 14px; background: white; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    .states { display: flex; gap: 6px; flex-wrap: wrap; }
+    .states button { border: 0; background: transparent; color: var(--muted); border-radius: 999px; padding: 5px 10px; cursor: pointer; }
+    .states button[aria-pressed="true"] { background: var(--ink); color: white; }
+    .bar { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin: 12px auto 0; width: min(720px, calc(100% - 24px)); padding: 12px 14px; background: white; border-radius: 14px; }
+    .bar b { display: block; }
+    .bar span { color: var(--muted); font-size: 13px; }
+    .log { flex: 1; overflow: auto; width: min(720px, calc(100% - 24px)); margin: 12px auto; display: flex; flex-direction: column; gap: 10px; }
+    .me, .ai { max-width: 86%; padding: 10px 12px; border-radius: 14px; }
+    .me { align-self: flex-end; background: #172433; color: white; }
+    .ai { align-self: flex-start; background: white; }
+    .weather { display: flex; justify-content: space-between; gap: 8px; }
+    .miss { color: #9f2d22; }
+    form { display: flex; gap: 8px; width: min(720px, calc(100% - 24px)); margin: 0 auto 14px; }
+    input { flex: 1; border: 0; border-radius: 12px; padding: 12px 14px; }
+    button.send { border: 0; background: #157a9e; color: white; border-radius: 12px; padding: 0 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="review">
+    <div><b>界面原型 v0.10</b> · 对话是主界面。问天气不出地图。演示数据。</div>
+    <div class="states">
+      <button type="button" data-scene="empty">空</button>
+      <button type="button" data-scene="plan" aria-pressed="true">安排行程</button>
+      <button type="button" data-scene="weather">问天气</button>
+      <button type="button" data-scene="fail">没查到</button>
+    </div>
+  </div>
+  <header class="bar" id="bar"></header>
+  <section class="log" id="log"></section>
+  <form id="form"><input aria-label="出行需求" placeholder="接着说"><button class="send" type="submit">发送</button></form>
+  <script>
+    const bar = document.getElementById("bar");
+    const log = document.getElementById("log");
+    const scenes = {
+      empty: { plan: ["还没有安排", "说一个城市后再出现在这里"], messages: [] },
+      plan: { plan: ["成都 · 三天 · 轻松不赶", "下一站 · 熊猫基地"], messages: [["me", "成都两天，轻松不赶"], ["ai", "先按两天：上午熊猫基地，下午宽窄巷子。"], ["me", "改成三天"], ["ai", "加上第三天上午去近郊，下午回市区。"]] },
+      weather: { plan: ["成都 · 三天 · 轻松不赶", "行程没改"], messages: [["me", "丽江今天天气"], ["ai", `<div class="weather"><b>丽江 · 今天</b><span>多云 9–23℃</span></div>`]] },
+      fail: { plan: ["成都 · 三天 · 轻松不赶", "行程没改"], messages: [["me", "丽江今天天气"], ["ai", `<p class="miss">这次没查到。高德没有返回丽江的天气。</p>`]] }
+    };
+    function show(name) {
+      const scene = scenes[name];
+      bar.innerHTML = `<div><b>${scene.plan[0]}</b><span>${scene.plan[1]}</span></div>`;
+      log.innerHTML = scene.messages.map(([role, html]) => `<div class="${role}">${html}</div>`).join("") || `<div class="ai">直接说城市和天数。问天气的时候，这里只回答天气。</div>`;
+      document.querySelectorAll(".states button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.scene === name)));
+    }
+    document.querySelectorAll(".states button").forEach((button) => button.addEventListener("click", () => show(button.dataset.scene)));
+    document.getElementById("form").addEventListener("submit", (event) => event.preventDefault());
+    show("plan");
+  </script>
+</body>
+</html>

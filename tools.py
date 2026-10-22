@@ -62,23 +62,30 @@ def _ensure_async_loop() -> asyncio.AbstractEventLoop | None:
 
 
 def _run_coroutine_sync(coro_func, *args, **kwargs):
-    """在常驻事件循环上同步执行协程函数；若失败则回退到 anyio.run"""
+    """在常驻事件循环上同步执行协程。超时后直接失败，不再改走没有时限的调用。"""
     loop = _ensure_async_loop()
     if loop:
+        fut: Future = asyncio.run_coroutine_threadsafe(
+            coro_func(*args, **kwargs), loop
+        )
         try:
-            fut: Future = asyncio.run_coroutine_threadsafe(
-                coro_func(*args, **kwargs), loop
-            )
             return fut.result(timeout=Config.ASYNC_TOOL_TIMEOUT)
         except Exception as e:
-            logger.warning(
-                "[AsyncLoop] 执行协程失败/超时，回退到 anyio.run()：%s", e
-            )
+            fut.cancel()
+            logger.warning("[AsyncLoop] 执行协程失败或超时：%s", e)
+            raise
 
     async def _runner():
         return await coro_func(*args, **kwargs)
 
     return anyio.run(_runner)
+
+
+def _tool_text(value):
+    """MCP 工具常返回 (文本, None)。模型只能读文本，坐标也只从这段 JSON 里取。"""
+    if isinstance(value, tuple) and value and isinstance(value[0], str):
+        return value[0]
+    return value
 
 
 def _safe_run_coro(coro_func, *args, **kwargs):
@@ -88,7 +95,11 @@ def _safe_run_coro(coro_func, *args, **kwargs):
     except Exception as e:
         error_msg = str(e)
         logger.warning("[Tool] 工具执行异常：%s", error_msg[:200])
-        return f"工具执行失败：{error_msg[:300]}。请检查参数是否正确（如是否缺少 city 参数），或基于已知信息直接回答。"
+        # 失败要让模型看得出没查到，不能引导它把失败当成已查到的结果继续作答
+        return (
+            f"工具执行失败：{error_msg[:300]}。本次没有查到数据。"
+            "回答中必须说明这一项没查到，不得编造天气、地点或路线。"
+        )
 
 
 def wrap_async_tool_to_sync(t):
@@ -113,7 +124,7 @@ def wrap_async_tool_to_sync(t):
             if args_schema is not None:
 
                 def _sync(**kwargs):
-                    return _safe_run_coro(t.ainvoke, kwargs)
+                    return _tool_text(_safe_run_coro(t.ainvoke, kwargs))
 
                 return StructuredTool.from_function(
                     func=_sync,
@@ -125,7 +136,7 @@ def wrap_async_tool_to_sync(t):
             else:
 
                 def _sync(tool_input):
-                    return _safe_run_coro(t.ainvoke, tool_input)
+                    return _tool_text(_safe_run_coro(t.ainvoke, tool_input))
 
                 return Tool.from_function(
                     func=_sync,
@@ -140,7 +151,7 @@ def wrap_async_tool_to_sync(t):
     if args_schema is not None:
 
         def _sync(**kwargs):
-            return _safe_run_coro(coroutine, **kwargs)
+            return _tool_text(_safe_run_coro(coroutine, **kwargs))
 
         return StructuredTool.from_function(
             func=_sync,
@@ -152,7 +163,7 @@ def wrap_async_tool_to_sync(t):
     else:
 
         def _sync(tool_input):
-            return _safe_run_coro(coroutine, tool_input)
+            return _tool_text(_safe_run_coro(coroutine, tool_input))
 
         return Tool.from_function(
             func=_sync,

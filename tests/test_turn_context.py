@@ -36,6 +36,68 @@ def _trip(*texts: str):
     return middleware.trip_state_from_texts(list(texts))
 
 
+class ToolBudgetTest(unittest.TestCase):
+    def test_extra_map_tools_are_not_sent_out(self):
+        called = []
+        result = middleware.track_tool_budget.wrap_tool_call(
+            _ToolRequest({"name": "maps_direction_driving", "args": {}, "id": "d1"}),
+            lambda req: called.append(req) or "sent",
+        )
+        self.assertEqual(called, [])
+        self.assertIn("不用调用", result.content)
+
+    def test_text_search_is_still_sent_out(self):
+        called = []
+        result = middleware.track_tool_budget.wrap_tool_call(
+            _ToolRequest({"name": "maps_text_search", "args": {"keywords": "故宫"}, "id": "s1"}),
+            lambda req: called.append(req.tool_call["name"]) or "sent",
+        )
+        self.assertEqual(called, ["maps_text_search"])
+        self.assertEqual(result, "sent")
+
+    def test_second_text_search_in_same_round_is_not_sent(self):
+        called = []
+        first = _ToolRequest({"name": "maps_text_search", "args": {}, "id": "s1"})
+        second = _ToolRequest({"name": "maps_text_search", "args": {}, "id": "s2"})
+        second.runtime = first.runtime
+
+        middleware.track_tool_budget.wrap_tool_call(
+            first, lambda req: called.append(req.tool_call["id"]) or "sent"
+        )
+        result = middleware.track_tool_budget.wrap_tool_call(
+            second, lambda req: called.append(req.tool_call["id"]) or "sent"
+        )
+        self.assertEqual(called, ["s1"])
+        self.assertIn("已经搜过", result.content)
+
+    def test_new_round_can_search_again(self):
+        called = []
+        first = _ToolRequest({"name": "maps_text_search", "args": {}, "id": "s1"})
+        middleware.track_tool_budget.wrap_tool_call(
+            first, lambda req: called.append(req.tool_call["id"]) or "sent"
+        )
+        again = _ToolRequest({"name": "maps_text_search", "args": {}, "id": "s9"})
+        result = middleware.track_tool_budget.wrap_tool_call(
+            again, lambda req: called.append(req.tool_call["id"]) or "sent"
+        )
+        self.assertEqual(result, "sent")
+        self.assertEqual(called, ["s1", "s9"])
+
+    def test_second_weather_in_same_round_is_not_sent(self):
+        called = []
+        first = _ToolRequest({"name": "maps_weather", "args": {}, "id": "w1"})
+        second = _ToolRequest({"name": "maps_weather", "args": {}, "id": "w2"})
+        second.runtime = first.runtime
+        middleware.track_tool_budget.wrap_tool_call(
+            first, lambda req: called.append(req.tool_call["id"]) or "sent"
+        )
+        result = middleware.track_tool_budget.wrap_tool_call(
+            second, lambda req: called.append(req.tool_call["id"]) or "sent"
+        )
+        self.assertEqual(called, ["w1"])
+        self.assertIn("已经查过", result.content)
+
+
 def _tool_city(args: dict, trip) -> str | None:
     seen = []
     middleware.enforce_city_on_tools.wrap_tool_call(

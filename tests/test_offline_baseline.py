@@ -183,6 +183,41 @@ class CityInjectionTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
 
+class ToolFailureTextTest(unittest.TestCase):
+    """地图工具出错时，交给模型的必须是失败，不能鼓励它当成查到了接着答。"""
+
+    def _assert_visible_failure(self, text: str) -> None:
+        self.assertIn("工具执行失败", text)
+        self.assertNotIn("直接回答", text)
+        self.assertNotIn("基于已知信息", text)
+
+    def test_timeout_is_reported_as_failure(self):
+        import tools
+
+        async def slow():
+            raise TimeoutError("timed out")
+
+        self._assert_visible_failure(tools._safe_run_coro(slow))
+
+    def test_quota_error_is_reported_as_failure(self):
+        import tools
+
+        async def quota():
+            raise RuntimeError("CUQPS_HAS_EXCEEDED_THE_LIMIT")
+
+        self._assert_visible_failure(tools._safe_run_coro(quota))
+
+    def test_successful_result_is_returned_unchanged(self):
+        import tools
+
+        async def weather():
+            return '{"city":"成都","weather":"多云"}'
+
+        self.assertEqual(
+            tools._safe_run_coro(weather), '{"city":"成都","weather":"多云"}'
+        )
+
+
 class NoKeyNoModelTest(unittest.TestCase):
     def test_importing_ui_without_key_does_not_construct_model(self):
         script = r"""

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>旅游助手界面原型 v0.7</title>
+  <style>
+    :root { --ink: #2a241c; --muted: #6d6256; --paper: #f6edd8; --line: #e2d3b4; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body { display: flex; flex-direction: column; color: var(--ink); background: #efe4cc; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    button, input { font: inherit; color: inherit; }
+    .review { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 14px; background: #fffaf0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    .states { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .states button, .textish { border: 0; background: transparent; border-radius: 999px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+    .states button[aria-pressed="true"] { background: var(--ink); color: #f6edd8; }
+    .app { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px 1fr; }
+    .list { overflow: auto; padding: 18px 16px 88px; background: #fffaf0; border-right: 1px solid var(--line); }
+    .kicker { margin: 0; letter-spacing: 0.12em; font-size: 12px; color: var(--muted); }
+    h1 { margin: 6px 0 0; font-size: 32px; letter-spacing: -0.04em; }
+    .meta { margin: 6px 0 14px; color: var(--muted); }
+    .day { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--line); background: transparent; padding: 12px 0; cursor: pointer; }
+    .day b { display: block; }
+    .day span, .ask { color: var(--muted); font-size: 13px; }
+    .day[aria-pressed="true"] b { text-decoration: underline; text-underline-offset: 4px; }
+    .miss { color: #8a3b32; }
+    .map { position: relative; min-height: 0; }
+    .map svg { width: 100%; height: 100%; display: block; }
+    .step { opacity: 0; animation: step-in .25s forwards; }
+    @keyframes step-in { to { opacity: .9; } }
+    .dock { position: absolute; left: 336px; right: 14px; bottom: 14px; display: flex; gap: 8px; padding: 8px; background: rgba(255, 250, 240, .94); border: 1px solid var(--line); border-radius: 14px; }
+    .dock input { flex: 1; border: 0; background: transparent; padding: 10px 8px; }
+    .send { border: 0; background: var(--ink); color: #f6edd8; border-radius: 10px; padding: 0 14px; cursor: pointer; }
+    @media (max-width: 860px) {
+      body { height: auto; }
+      .app { grid-template-columns: 1fr; }
+      .map { min-height: 420px; }
+      .dock { left: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="review">
+    <div><b>界面原型 v0.7</b> · 手绘示意，不是高德，也不是活点地图的复刻。</div>
+    <div class="states">
+      <button type="button" data-scene="empty">空</button>
+      <button type="button" data-scene="places">没说天数</button>
+      <button type="button" data-scene="three" aria-pressed="true">三天</button>
+      <button type="button" data-scene="seven">七天</button>
+      <button type="button" data-scene="fail">失败</button>
+    </div>
+  </div>
+  <main class="app">
+    <section class="list" id="list"></section>
+    <section class="map">
+      <svg id="map" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid slice">
+        <filter id="paper">
+          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" result="n"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 0.55  0 0 0 0 0.45  0 0 0 0 0.28  0 0 0 .18 0" in="n"/>
+        </filter>
+        <rect width="1000" height="640" fill="#f3e6c4"/>
+        <rect width="1000" height="640" filter="url(#paper)"/>
+        <path d="M40 80 C220 150 180 280 340 330 C520 388 500 500 700 540 C820 566 900 600 990 630" fill="none" stroke="#8eaaab" stroke-width="22" stroke-linecap="round" opacity=".55"/>
+        <path d="M30 200 H340 M220 40 V360 M400 160 H980 M140 500 H760" fill="none" stroke="#2a241c" stroke-width="1.4" stroke-dasharray="2 7" opacity=".45"/>
+        <g id="marks"></g>
+      </svg>
+      <form class="dock" id="form">
+        <input id="input" aria-label="出行需求" />
+        <button class="textish" id="clear" type="button">清空</button>
+        <button class="send" type="submit">发送</button>
+      </form>
+    </section>
+  </main>
+  <script>
+    const list = document.getElementById("list");
+    const marks = document.getElementById("marks");
+    const input = document.getElementById("input");
+    const three = [
+      [["熊猫基地", 180, 250, "上午，人少一些"], ["宽窄巷子", 300, 360, "下午慢慢走"]],
+      [["人民公园", 450, 270, "喝茶"], ["火锅", 540, 400, "晚饭"]],
+      [["近郊", 760, 180, "只留半天"]]
+    ];
+    const seven = [
+      [["熊猫基地", 150, 220, "上午"]],
+      [["宽窄巷子", 250, 340, "老城"]],
+      [["人民公园", 390, 250, "喝茶"]],
+      [["博物馆", 480, 370, "室内"]],
+      [["东郊", 640, 300, "一个小馆"]],
+      [["河岸", 760, 450, "傍晚"]],
+      [["近郊", 840, 160, "半天"]]
+    ];
+    const loose = [["熊猫基地", 180, 250, "还没排进某一天"], ["宽窄巷子", 300, 360, "还没排进某一天"], ["人民公园", 450, 270, "还没排进某一天"]];
+    let scene = null;
+    let selected = 0;
+
+    function footprints(stops) {
+      const nodes = [];
+      for (let i = 0; i < stops.length - 1; i++) {
+        const a = stops[i], b = stops[i + 1];
+        const dx = b[1] - a[1], dy = b[2] - a[2];
+        const dist = Math.hypot(dx, dy);
+        const n = Math.max(2, Math.round(dist / 28));
+        const ang = Math.atan2(dy, dx);
+        for (let k = 0; k < n; k++) {
+          const t = k / n;
+          const x = a[1] + dx * t, y = a[2] + dy * t;
+          const side = k % 2 ? 1 : -1;
+          const ox = -Math.sin(ang) * side * 5;
+          const oy = Math.cos(ang) * side * 5;
+          const delay = (nodes.length * 0.045).toFixed(2);
+          nodes.push(`<ellipse class="step" cx="${x + ox}" cy="${y + oy}" rx="4.2" ry="7" fill="#4a3b2a" transform="rotate(${ang * 180 / Math.PI + 90} ${x + ox} ${y + oy})" style="animation-delay:${delay}s"/>`);
+        }
+      }
+      return nodes.join("");
+    }
+
+    function pin(stop, faded) {
+      const opacity = faded ? .28 : .95;
+      return `<g class="spot" data-name="${stop[0]}" opacity="${opacity}" style="cursor:pointer"><circle cx="${stop[1]}" cy="${stop[2]}" r="5" fill="#2a241c"></circle><text x="${stop[1]}" y="${stop[2] - 12}" text-anchor="middle" font-size="14" fill="#2a241c" font-family="Segoe UI, Microsoft YaHei, sans-serif">${stop[0]}</text></g>`;
+    }
+
+    function drawMap() {
+      const groups = scene.days || [scene.places];
+      let html = "";
+      groups.forEach((stops, index) => {
+        const faded = Boolean(scene.days) && index !== selected;
+        stops.forEach((stop) => { html += pin(stop, faded); });
+        if (scene.days && index === selected) html += footprints(stops);
+      });
+      marks.innerHTML = html;
+      marks.querySelectorAll(".spot").forEach((node) => {
+        node.addEventListener("click", () => {
+          if (!scene.days) return;
+          scene.days.forEach((stops, index) => {
+            if (stops.some((stop) => stop[0] === node.dataset.name)) selected = index;
+          });
+          render();
+        });
+      });
+    }
+
+    function render() {
+      const days = scene.days || [];
+      const rows = days.map((stops, index) => `<button class="day" type="button" data-day="${index}" aria-pressed="${index === selected}"><b>第 ${index + 1} 天 · ${stops[0][0]}</b><span>${stops.map((stop) => stop[0]).join(" → ")}</span></button>`).join("");
+      const looseRows = scene.places.map((stop) => `<button class="day" type="button"><b>${stop[0]}</b><span>${stop[3]}</span></button>`).join("");
+      list.innerHTML = `<p class="kicker">这次行程</p><h1>${scene.city}</h1><p class="meta">${scene.meta}</p>${scene.note ? `<p class="miss">${scene.note}</p>` : ""}${rows || looseRows}`;
+      list.querySelectorAll("[data-day]").forEach((button) => {
+        button.addEventListener("click", () => { selected = Number(button.dataset.day); render(); });
+      });
+      input.placeholder = scene.placeholder;
+      drawMap();
+    }
+
+    function show(name) {
+      selected = 0;
+      const scenes = {
+        empty: { city: "还没有", meta: "说一个城市，地图上才会有地点。", days: null, places: [], note: "", placeholder: "成都两天，轻松一点" },
+        places: { city: "成都", meta: "还没说天数，所以只有地点，没有脚印。", days: null, places: loose, note: "", placeholder: "可以接着说排成三天" },
+        three: { city: "成都", meta: "三天 · 轻松不赶 · 多云 18–26℃", days: three, places: [], note: "", placeholder: "点左边某一天，看这一天的脚印" },
+        seven: { city: "成都", meta: "七天 · 轻松不赶", days: seven, places: [], note: "", placeholder: "七天也是这一张图" },
+        fail: { city: "成都", meta: "三天 · 上一句没查到", days: three, places: [], note: "这次没查到丽江的天气。没有新的脚印，成都还在。", placeholder: "成都两天，轻松一点" }
+      };
+      scene = scenes[name];
+      document.querySelectorAll(".states button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.scene === name)));
+      render();
+    }
+
+    document.querySelectorAll(".states button").forEach((button) => button.addEventListener("click", () => show(button.dataset.scene)));
+    document.getElementById("clear").addEventListener("click", () => { input.value = ""; show("empty"); });
+    document.getElementById("form").addEventListener("submit", (event) => { event.preventDefault(); input.placeholder = "原型不会真的发送。用顶部示例切换。"; });
+    show("three");
+  </script>
+</body>
+</html>
