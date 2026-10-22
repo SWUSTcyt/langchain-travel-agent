@@ -37,4 +37,4 @@ README 文件以及项目名称啥的你觉得是否需要调整，现在咱们�
 
 ### P2
 
-- [ ] `requirements.txt` 的 `gradio>=4.1.0` 与实际需要的 Gradio 6 不一致，另开任务。
+- [x] `requirements.txt` 的 `gradio>=4.1.0` 与实际需要的 Gradio 6 不一致，已在 ISSUE-017 改为 `>=6.0.0`。
