@@ -1,6 +1,6 @@
 # Issue: PR #3 审查问题修复
 
-> 状态：已确认。除截图外均已完成。
+> 状态：已确认并完成。
 
 ## 用户原话（2026-10-23）
 
@@ -40,7 +40,7 @@ PR #3 审查结论「不可合入」，两条 P1：
 ### P1
 
 - [x] README 环境配置写明 `AMAP_JS_KEY` 和 `AMAP_JS_SECURITY_CODE`，不再出现「并行调用」「路线规划」作为现有功能。证据：`readme.md` 环境配置一节；全文搜索「并行」「路线规划」「searchPOI」无结果。
-- [ ] README 截图引用的路径与告诉用户的放置位置一致：`docs/images/ui-preview.png`。README 已引用，等用户放入图片后提交。
+- [x] README 截图引用的路径与告诉用户的放置位置一致：`docs/images/ui-preview.png`。证据：用户截取的杭州一天行程图已放入（原文件名多了一个 `.png`，已改正）。
 - [x] PR 与 `origin/main` 比较时，不再有只因换行符变化的文件。证据：暂存区 68 个文件逐个检查无 CRLF；ISSUE-001、ISSUE-002 不再出现在差异里。
 - [x] 新增与改动模块的单测覆盖率 ≥ 80%。证据：coverage 报告 `itinerary.py` 83%，`itinerary_view.py` 87%。
 
