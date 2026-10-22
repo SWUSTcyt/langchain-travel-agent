@@ -1,6 +1,6 @@
 # Issue: README 与仓库展示信息
 
-> 状态：已确认并完成。许可证识别待合并后核对。
+> 状态：已确认并完成。
 
 ## 用户原话（2026-10-23）
 
@@ -32,7 +32,7 @@ README 文件以及项目名称啥的你觉得是否需要调整，现在咱们�
 
 - [x] 截图在 README 前 15 行内出现。证据：`readme.md` 第 10 行。
 - [x] 技术栈表与主程序实际依赖一致。证据：`agent.py:6` 引入 `langchain_openai`；`pip list`：langchain 1.1.0、langchain-openai 1.3.2、langchain-mcp-adapters 0.1.14、gradio 6.0.1。
-- [ ] GitHub 显示 MIT 许可证与话题标签。证据：话题标签 6 个已生效；`licenseInfo` 仍为 null，要等 PR #3 合并到 `main` 后 GitHub 才会识别。
+- [x] GitHub 显示 MIT 许可证与话题标签。证据：PR #3 合并（`2093287`）后 `gh repo view` 显示 `MIT License`，话题标签 6 个。
 - [x] README 中的相对链接都指向存在的文件。证据：`src/amap-mcp-config.png`、`docs/ARCHITECTURE.md`、`docs/images/ui-preview.png`、`LICENSE` 等逐个 `Test-Path` 为 True。
 
 ### P2
